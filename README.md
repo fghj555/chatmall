@@ -6,10 +6,8 @@
 # ngrok http --url=satyr-inviting-quetzal.ngrok-free.app 5050
 (satyr-inviting-quetzal.ngrok-free.app은 ngrok의 개인 도메인주소)
 
-# ngrok http --url=viable-shark-faithful.ngrok-free.app 5050
-# (선오 ngork 개인 도메인주소)
 
-# ngrok http --url=polecat-precious-termite.ngrok-free.app 5050
+ngrok http --url=polecat-precious-termite.ngrok-free.app 5051
 
 
 # Python 은 3.8.20
