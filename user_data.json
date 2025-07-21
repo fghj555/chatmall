@@ -1,0 +1,44 @@
+{
+  "8928054033898384": {
+    "product_code": null,
+    "product_name": null,
+    "selected_option": null,
+    "extra_price": 0,
+    "quantity": 0,
+    "unit_price": 0,
+    "shipping_fee": 0,
+    "total_price": 0,
+    "bundle_size": 0,
+    "bundles_needed": 1,
+    "product_info": {},
+    "order_status": "none",
+    "last_updated": 1752815943.4935298
+  },
+  "24983561444565533": {
+    "product_code": "WFIA9PJ",
+    "product_name": "휴대용 선풍기 핸디팬 급속 에디홈 냉각 손선풍기",
+    "selected_option": null,
+    "extra_price": 0,
+    "quantity": 3,
+    "unit_price": 32630,
+    "shipping_fee": 3000,
+    "total_price": 100890,
+    "max_quantity": 10,
+    "product_info": {
+      "상품코드": "WFIA9PJ",
+      "제목": "휴대용 선풍기 핸디팬 급속 에디홈 냉각 손선풍기",
+      "가격": 32630,
+      "배송비": 3000,
+      "이미지": "https://cdn.ownerclan.com/UTqPfktgNUnvVoD3NMODiM98dHuTHzaC49FYDXvvFlw/marketize/300/as/v1.jpg",
+      "원산지": "해외|아시아|중국",
+      "상품링크": "https://polecat-precious-termite.ngrok-free.app/preview?html=PGRpdiBzdHlsZT0idGV4dC1hbGlnbjogY2VudGVyOyI%2BPHNwYW4gc3R5bGU9ImZvbnQtc2l6ZToxOHB0OyI%2BMTHqsJwg7J207IOBIOyDge2SiCDqtazrp6Qg7IucLCAxMOqwnCDri6jsnITroZwg67Cw7Iah67mE66W8IOy2lOqwgCDsmpTssq3tlaAg7IiYIOyeiOyKteuLiOuLpC48L3NwYW4%2BPC9kaXY%2BPGJyPuuzuCDsg4HtkojsnZgg64uo7Iic67OA7Ius7Jy866GcIOyduO2VnCDrsJjtkogv6rWQ7ZmYIOyZleuzteuwsOyGoeu5hOuKlCA4MDAw7JuQ7J6F64uI64ukLjxicj48YnI%2BPGNlbnRlcj48SU1HIHNyYz0iaHR0cDovL2ltZy5lbHJ1ZnVuLmNvLmtyL2VscnVmdW5fc2hvcHBpbmdfbWFsbC8xX2VsZWNfd19ldGMvMjAyNDA2MTJfc2hfODguanBnIj48YnI%2BPHAgYWxpZ249ImNlbnRlciIgc3R5bGU9ImZvbnQtc2l6ZTogMTJweDsgY29sb3I6ICM3Nzc3Nzc7IGRpc3BsYXk6IGJsb2NrOyBtYXJnaW46IDIwcHggMDsiPuuzuCDsoJztkojsnYQg6rWs66ek7ZWY7Iuc66m0IOybkO2ZnO2VnCDrsLDshqHsnYQg7JyE7ZW0IOq8rSDtlYTsmpTtlZwg6rOg6rCd64uY7J2YIOqwnOyduOygleuztOulvCAo7ISx7ZWoLCDso7zshowsIOyghO2ZlOuyiO2YuCDrk7EpIO2DneuwsOyCrCDrsI8g7KCcIDPsl4XssrTsl5DshJwg7J207Jqp7ZWY64qUIOqyg%2ByXkCDrj5nsnZjtlZjsi5zripQg6rKD7Jy866GcIOqwhOyjvOuQqeuLiOuLpC48YnI%2BIOqwnOyduOygleuztOuKlCDrsLDshqEg7Jm47J2YIOyaqeuPhOuhnOuKlCDsoIjrjIAg7IKs7Jqp65CY7KeAIOyViuycvOuLiCDslYjsi6ztlZjsi5zquLAg67CU656N64uI64ukLiDslYjsoITtlZjqsowg67Cw7Iah7ZW0IOuTnOumrOqyoOyKteuLiOuLpC48L3A%2BPC9jZW50ZXI%2B",
+      "옵션": "없음",
+      "조합형옵션": "nan",
+      "최대구매수량": 10
+    },
+    "order_status": "confirmed",
+    "last_updated": 1753062041.8295586,
+    "bundle_size": 10,
+    "bundles_needed": 1
+  }
+}
