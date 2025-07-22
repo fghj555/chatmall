@@ -183,7 +183,6 @@ facebook_chatbot/
 ├── Dockerfile                   # Docker 설정 파일
 ├── requirements.txt             # Python 패키지 의존성
 ├── .env                        # 환경변수 (생성 필요)
-├── .env.example               # 환경변수 예시
 ├── 카테고리목록.csv            # 상품 카테고리 데이터
 ├── user_data.json             # 사용자 임시 데이터 (자동 생성)
 ├── order_data.json            # 주문 정보 (자동 생성)
