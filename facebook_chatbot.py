@@ -88,7 +88,7 @@ llm = OpenAI(api_key=API_KEY, model=LLM_MODEL, temperature=0)
 embedder = OpenAIEmbeddings(api_key=API_KEY, model=EMB_MODEL)
 
 # API_URL 설정 (ngrok URL로 변경)
-API_URL = "https://polecat-precious-termite.ngrok-free.app"
+API_URL = os.getenv('API_URL', 'https://polecat-precious-termite.ngrok-free.app')
 # print(f"🔍 로드된 VERIFY_TOKEN: {VERIFY_TOKEN}")
 # print(f"🔍 로드된 PAGE_ACCESS_TOKEN: {PAGE_ACCESS_TOKEN}")
 # print(f"🔍 로드된 API_KEY: {API_KEY}")
