@@ -1,4 +1,4 @@
-# ===== 권한 문제 해결 Dockerfile =====
+# ===== 쓰기 권한 해결 Dockerfile =====
 FROM python:3.8.20
 
 # 환경변수
@@ -14,16 +14,17 @@ RUN apt-get update && \
 # 작업 디렉토리
 WORKDIR /app
 
-# Python 의존성 설치 (root 권한으로 한 번에)
+# Python 의존성 설치
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# JSON 파일 권한 설정 (쓰기 가능)
-RUN chmod 666 user_data.json order_data.json || true
-RUN touch user_data.json order_data.json && chmod 666 user_data.json order_data.json
-
 # 앱 소스 복사
 COPY . .
+
+# JSON 파일 생성 및 권한 설정
+RUN touch user_data.json order_data.json && \
+    chmod 777 user_data.json order_data.json && \
+    chmod 777 /app
 
 # 환경변수
 ENV REDIS_URL=redis://localhost:6379/0
@@ -32,5 +33,5 @@ ENV PORT=5051
 # 포트 노출
 EXPOSE 5051
 
-# 간단한 시작 명령
+# 시작 명령
 CMD ["sh", "-c", "redis-server --daemonize yes && sleep 3 && python facebook_chatbot.py"]
