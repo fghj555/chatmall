@@ -291,9 +291,18 @@ def init_google_sheets():
         scope = ['https://spreadsheets.google.com/feeds',
                 'https://www.googleapis.com/auth/drive']
         
-        # JSON 키 파일 경로
-        json_key_path = "facebook-chatbot-2025-964a5c0d60ce.json"
-        credential = ServiceAccountCredentials.from_json_keyfile_name(json_key_path, scope)
+        # 환경변수에서 Google 인증 정보 가져오기
+        credentials_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
+        
+        if credentials_json:
+            # CloudType: 환경변수의 JSON 문자열 사용
+            credentials_dict = json.loads(credentials_json)
+            credential = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
+        else:
+            # 로컬: JSON 파일 사용
+            json_key_path = "facebook-chatbot-2025-964a5c0d60ce.json"
+            credential = ServiceAccountCredentials.from_json_keyfile_name(json_key_path, scope)
+        
         gc = gspread.authorize(credential)
         
         # 스프레드시트 URL
