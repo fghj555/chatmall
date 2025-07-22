@@ -16,7 +16,7 @@
 ## 기술 스택
 
 - **웹 프레임워크**: FastAPI
-- **AI/ML**: OpenAI GPT-4, LangChain, OpenAI Embeddings
+- **AI/ML**: OpenAI GPT-4.1 mini, LangChain, OpenAI Embeddings
 - **데이터베이스**: Milvus (벡터 데이터베이스), Redis (세션 저장소)
 - **API 연동**: Facebook Messenger API, Google Sheets API
 - **배포 환경**: CloudType
