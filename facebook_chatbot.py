@@ -88,7 +88,7 @@ llm = OpenAI(api_key=API_KEY, model=LLM_MODEL, temperature=0)
 embedder = OpenAIEmbeddings(api_key=API_KEY, model=EMB_MODEL)
 
 # API_URL 설정 (ngrok URL로 변경)
-API_URL = "https://polecat-precious-termite.ngrok-free.app"
+API_URL = "https://port-0-chatmall-mddsxz1wc930914e.sel5.cloudtype.app"
 # print(f"🔍 로드된 VERIFY_TOKEN: {VERIFY_TOKEN}")
 # print(f"🔍 로드된 PAGE_ACCESS_TOKEN: {PAGE_ACCESS_TOKEN}")
 # print(f"🔍 로드된 API_KEY: {API_KEY}")
@@ -499,14 +499,16 @@ def safe_int(val):
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[API_URL,
-                  "http://localhost:5050",
-                   "https://polecat-precious-termite.ngrok-free.app"],
+    allow_origins=[
+        API_URL,  # 새로운 CloudType URL
+        "http://localhost:5050",  # 로컬 개발용
+        "https://polecat-precious-termite.ngrok-free.app",  # 기존 ngrok (백업용)
+        "https://port-0-chatmall-mddsxz1wc930914e.sel5.cloudtype.app"  # 명시적 추가
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
 )
-
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("response_time_logger")
