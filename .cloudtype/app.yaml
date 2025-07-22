@@ -1,0 +1,10 @@
+name: facebook-chatbot
+app: dockerfile
+options:
+  dockerfile: ./Dockerfile
+  ports: 5051
+  env:
+    - name: PORT
+      value: "5051"
+    - name: REDIS_URL
+      value: "redis://localhost:6379/0"
