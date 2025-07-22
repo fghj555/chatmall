@@ -2480,9 +2480,22 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
     """Facebook 웹훅 메시지 처리"""
     try:
         data = await request.json()
-        print(f"📥 받은 데이터: {json.dumps(data, indent=2, ensure_ascii=False)}")
         
-        # ✅ 즉시 성공 응답 반환 (5초 제한 준수)
+        # 불필요한 이벤트 필터링
+        should_log = False
+        for entry in data.get("entry", []):
+            for messaging in entry.get("messaging", []):
+                # 실제 메시지나 postback만 출력
+                if "message" in messaging and messaging["message"].get("text"):
+                    should_log = True
+                elif "postback" in messaging:
+                    should_log = True
+        
+        # 의미있는 이벤트만 출력
+        if should_log:
+            print(f"📥 받은 메시지: {json.dumps(data, indent=2, ensure_ascii=False)}")
+        
+        # 즉시 성공 응답 반환 (5초 제한 준수)
         if data.get("object") == "page":
             # 백그라운드에서 메시지 처리
             background_tasks.add_task(process_webhook_data, data)
