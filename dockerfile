@@ -18,6 +18,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# JSON 파일 권한 설정 (쓰기 가능)
+RUN chmod 666 user_data.json order_data.json || true
+RUN touch user_data.json order_data.json && chmod 666 user_data.json order_data.json
+
 # 앱 소스 복사
 COPY . .
 
