@@ -287,135 +287,58 @@ class OrderDataManager:
             return False
 
 def init_google_sheets():
-    """Google Sheets 연결 초기화 (개별 환경변수 사용) - 수정된 버전"""
+    """Google Sheets 연결 초기화 (환경변수 + Fallback)"""
     try:
-        print("[SHEETS] Google Sheets 연결 시작...")
+        scope = ['https://spreadsheets.google.com/feeds',
+                'https://www.googleapis.com/auth/drive']
         
-        # ✅ 개별 환경변수에서 Google 인증 정보 구성
-        google_type = os.getenv('GOOGLE_TYPE')
-        google_project_id = os.getenv('GOOGLE_PROJECT_ID')
-        google_private_key_id = os.getenv('GOOGLE_PRIVATE_KEY_ID')
-        google_private_key = os.getenv('GOOGLE_PRIVATE_KEY')
-        google_client_email = os.getenv('GOOGLE_CLIENT_EMAIL')
-        google_client_id = os.getenv('GOOGLE_CLIENT_ID')
-        google_auth_uri = os.getenv('GOOGLE_AUTH_URI')
-        google_token_uri = os.getenv('GOOGLE_TOKEN_URI')
-        google_auth_provider_cert_url = os.getenv('GOOGLE_AUTH_PROVIDER_CERT_URL')
-        google_client_cert_url = os.getenv('GOOGLE_CLIENT_CERT_URL')
-        google_universe_domain = os.getenv('GOOGLE_UNIVERSE_DOMAIN')
+        # 환경변수에서 JSON 내용 가져오기
+        credentials_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
         
-        # 필수 환경변수 확인
-        required_vars = {
-            'GOOGLE_TYPE': google_type,
-            'GOOGLE_PROJECT_ID': google_project_id,
-            'GOOGLE_PRIVATE_KEY': google_private_key,
-            'GOOGLE_CLIENT_EMAIL': google_client_email
-        }
-        
-        missing_vars = [key for key, value in required_vars.items() if not value]
-        if missing_vars:
-            print(f"[SHEETS] ❌ 필수 환경변수 누락: {missing_vars}")
-            return None
-        
-        print(f"[SHEETS] 환경변수 로드 완료")
-        print(f"[SHEETS] 프로젝트 ID: {google_project_id}")
-        print(f"[SHEETS] 서비스 계정: {google_client_email}")
-        
-        # ✅ 중요: private_key의 줄바꿈 문자 처리
-        # 환경변수에서 \n이 리터럴 문자열로 저장된 경우 실제 줄바꿈으로 변환
-        if google_private_key:
-            # 이미 실제 줄바꿈이 있는지 확인
-            if '\\n' in google_private_key and '\n' not in google_private_key:
-                # 리터럴 \n을 실제 줄바꿈으로 변환
-                google_private_key = google_private_key.replace('\\n', '\n')
-                print("[SHEETS] Private key 줄바꿈 문자 변환 완료")
-            
-            # PEM 형식 검증
-            if not google_private_key.startswith('-----BEGIN'):
-                print(f"[SHEETS] ⚠️ Private key가 PEM 형식이 아닐 수 있습니다")
-                print(f"[SHEETS] Private key 시작 부분: {google_private_key[:50]}...")
-        
-        # JSON 구성
-        credentials_info = {
-            "type": google_type,
-            "project_id": google_project_id,
-            "private_key_id": google_private_key_id,
-            "private_key": google_private_key,  # 수정된 private_key 사용
-            "client_email": google_client_email,
-            "client_id": google_client_id,
-            "auth_uri": google_auth_uri or "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": google_token_uri or "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url": google_auth_provider_cert_url or "https://www.googleapis.com/oauth2/v1/certs",
-            "client_x509_cert_url": google_client_cert_url,
-            "universe_domain": google_universe_domain or "googleapis.com"
-        }
-        
-        print("[SHEETS] ✅ 인증 정보 구성 완료")
-        
-        # Google API 스코프 설정
-        scopes = [
-            'https://www.googleapis.com/auth/spreadsheets',
-            'https://www.googleapis.com/auth/drive'
-        ]
-        
-        try:
-            # 최신 google-auth 라이브러리 사용
-            from google.oauth2 import service_account
-            
-            print("[SHEETS] 서비스 계정 인증 생성 중...")
-            credentials = service_account.Credentials.from_service_account_info(
-                credentials_info, 
-                scopes=scopes
-            )
-            
-            # gspread 클라이언트 생성
-            print("[SHEETS] gspread 클라이언트 생성 중...")
-            gc = gspread.authorize(credentials)
-            
-            # 스프레드시트 열기
-            spreadsheet_url = "https://docs.google.com/spreadsheets/d/1rFRveVzw4w4abPaJ2hSr0F9CnyKx0-mTPykc852jaU8/edit"
-            print("[SHEETS] 스프레드시트 열기 중...")
-            doc = gc.open_by_url(spreadsheet_url)
-            
-            # 시트 선택
-            sheet = doc.worksheet("Orders의 사본")
-            
-            print("✅ [SHEETS] Google Sheets 연결 성공!")
-            return sheet
-            
-        except ImportError as e:
-            print(f"[SHEETS] google-auth 라이브러리 없음, oauth2client 사용: {e}")
-            
-            # 폴백: 기존 oauth2client 사용
-            try:  
-                scope = ['https://spreadsheets.google.com/feeds',
-                        'https://www.googleapis.com/auth/drive']
+        if credentials_json:
+            print("[SHEETS] 환경변수에서 인증 정보 로드 중...")
+            try:
+                # JSON 문자열을 딕셔너리로 파싱
+                credentials_dict = json.loads(credentials_json)
+                credential = ServiceAccountCredentials.from_json_keyfile_dict(
+                    credentials_dict, scope
+                )
+                print("✅ 환경변수 인증 성공")
                 
-                credential = ServiceAccountCredentials.from_json_keyfile_dict(credentials_info, scope)
-                gc = gspread.authorize(credential)
-                
-                spreadsheet_url = "https://docs.google.com/spreadsheets/d/1rFRveVzw4w4abPaJ2hSr0F9CnyKx0-mTPykc852jaU8/edit"
-                doc = gc.open_by_url(spreadsheet_url)
-                sheet = doc.worksheet("Orders의 사본")
-                
-                print("✅ [SHEETS] Google Sheets 연결 성공! (oauth2client 사용)")
-                return sheet
-                
-            except Exception as fallback_error:
-                print(f"[SHEETS] ❌ oauth2client도 실패: {fallback_error}")
+            except json.JSONDecodeError as e:
+                print(f"❌ 환경변수 JSON 파싱 실패: {e}")
+                print("환경변수가 올바른 JSON 형식인지 확인하세요")
                 return None
+                
+        else:
+            print("[SHEETS] 환경변수 없음 - 로컬 파일 사용")
+            # Fallback: 로컬 JSON 파일 사용
+            json_key_path = "facebook-chatbot-2025-f79c8cbf74cf.json"
+            
+            if not os.path.exists(json_key_path):
+                print(f"❌ JSON 파일을 찾을 수 없습니다: {json_key_path}")
+                return None
+                
+            credential = ServiceAccountCredentials.from_json_keyfile_name(
+                json_key_path, scope
+            )
+            print("✅ 로컬 파일 인증 성공")
         
-        except Exception as auth_error:
-            print(f"[SHEETS] ❌ 인증 오류: {auth_error}")
-            print(f"[SHEETS] 상세 오류 정보:")
-            import traceback
-            print(traceback.format_exc())
-            return None
+        # gspread 클라이언트 생성
+        gc = gspread.authorize(credential)
+        
+        # 스프레드시트 연결
+        spreadsheet_url = "https://docs.google.com/spreadsheets/d/1rFRveVzw4w4abPaJ2hSr0F9CnyKx0-mTPykc852jaU8/edit"
+        doc = gc.open_by_url(spreadsheet_url)
+        
+        # 워크시트 선택
+        sheet = doc.worksheet("Orders의 사본")
+        
+        print("✅ Google Sheets 연결 성공")
+        return sheet
         
     except Exception as e:
-        print(f"[SHEETS] ❌ 전체 오류: {e}")
-        import traceback
-        print(traceback.format_exc())
+        print(f"❌ Google Sheets 연결 실패: {e}")
         return None
 
 def send_order_to_sheets(sender_id: str) -> bool:
