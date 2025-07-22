@@ -287,7 +287,7 @@ class OrderDataManager:
             return False
 
 def init_google_sheets():
-    """Google Sheets 연결 초기화 (개별 환경변수 사용)"""
+    """Google Sheets 연결 초기화 (개별 환경변수 사용) - 수정된 버전"""
     try:
         print("[SHEETS] Google Sheets 연결 시작...")
         
@@ -321,12 +321,26 @@ def init_google_sheets():
         print(f"[SHEETS] 프로젝트 ID: {google_project_id}")
         print(f"[SHEETS] 서비스 계정: {google_client_email}")
         
+        # ✅ 중요: private_key의 줄바꿈 문자 처리
+        # 환경변수에서 \n이 리터럴 문자열로 저장된 경우 실제 줄바꿈으로 변환
+        if google_private_key:
+            # 이미 실제 줄바꿈이 있는지 확인
+            if '\\n' in google_private_key and '\n' not in google_private_key:
+                # 리터럴 \n을 실제 줄바꿈으로 변환
+                google_private_key = google_private_key.replace('\\n', '\n')
+                print("[SHEETS] Private key 줄바꿈 문자 변환 완료")
+            
+            # PEM 형식 검증
+            if not google_private_key.startswith('-----BEGIN'):
+                print(f"[SHEETS] ⚠️ Private key가 PEM 형식이 아닐 수 있습니다")
+                print(f"[SHEETS] Private key 시작 부분: {google_private_key[:50]}...")
+        
         # JSON 구성
         credentials_info = {
             "type": google_type,
             "project_id": google_project_id,
             "private_key_id": google_private_key_id,
-            "private_key": google_private_key,
+            "private_key": google_private_key,  # 수정된 private_key 사용
             "client_email": google_client_email,
             "client_id": google_client_id,
             "auth_uri": google_auth_uri or "https://accounts.google.com/o/oauth2/auth",
@@ -393,10 +407,15 @@ def init_google_sheets():
         
         except Exception as auth_error:
             print(f"[SHEETS] ❌ 인증 오류: {auth_error}")
+            print(f"[SHEETS] 상세 오류 정보:")
+            import traceback
+            print(traceback.format_exc())
             return None
         
     except Exception as e:
         print(f"[SHEETS] ❌ 전체 오류: {e}")
+        import traceback
+        print(traceback.format_exc())
         return None
 
 def send_order_to_sheets(sender_id: str) -> bool:
