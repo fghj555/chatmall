@@ -89,7 +89,7 @@ llm = OpenAI(api_key=API_KEY, model=LLM_MODEL, temperature=0)
 embedder = OpenAIEmbeddings(api_key=API_KEY, model=EMB_MODEL)
 
 # API_URL 설정 (URL로 변경)
-API_URL = "https://port-0-chatmall2-mddsxz1wc930914e.sel5.cloudtype.appp"
+API_URL = "https://port-0-chatmall2-mddsxz1wc930914e.sel5.cloudtype.app"
 # print(f"🔍 로드된 VERIFY_TOKEN: {VERIFY_TOKEN}")
 # print(f"🔍 로드된 PAGE_ACCESS_TOKEN: {PAGE_ACCESS_TOKEN}")
 # print(f"🔍 로드된 API_KEY: {API_KEY}")
