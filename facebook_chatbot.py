@@ -12,7 +12,8 @@ from urllib.parse import quote
 import math
 import random
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2 import service_account
+import gspread
 from datetime import datetime
 import numpy as np
 import pandas as pd
@@ -286,37 +287,56 @@ class OrderDataManager:
             return False
 
 def init_google_sheets():
-    """Google Sheets 연결 초기화"""
+    """Google Sheets 연결 초기화 (최신 라이브러리 사용)"""
     try:
-        scope = ['https://spreadsheets.google.com/feeds',
-                'https://www.googleapis.com/auth/drive']
+        print("[SHEETS] Google Sheets 연결 시작...")
         
         # 환경변수에서 Google 인증 정보 가져오기
         credentials_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
         
-        if credentials_json:
-            # CloudType: 환경변수의 JSON 문자열 사용
-            credentials_dict = json.loads(credentials_json)
-            credential = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
-        else:
-            # 로컬: JSON 파일 사용
-            json_key_path = "facebook-chatbot-2025-964a5c0d60ce.json"
-            credential = ServiceAccountCredentials.from_json_keyfile_name(json_key_path, scope)
+        if not credentials_json:
+            print("[SHEETS] GOOGLE_CREDENTIALS_JSON 환경변수가 설정되지 않음")
+            return None
         
-        gc = gspread.authorize(credential)
+        print("[SHEETS] 인증 정보 파싱 중...")
+        credentials_info = json.loads(credentials_json)
         
-        # 스프레드시트 URL
-        spreadsheet_url = "https://docs.google.com/spreadsheets/d/1rFRveVzw4w4abPaJ2hSr0F9CnyKx0-mTPykc852jaU8/edit?gid=427192658#gid=427192658"
+        # Google API 스코프 설정
+        scopes = [
+            'https://www.googleapis.com/auth/spreadsheets',
+            'https://www.googleapis.com/auth/drive'
+        ]
+        
+        print(f"[SHEETS] 서비스 계정: {credentials_info.get('client_email', 'unknown')}")
+        
+        # 최신 google-auth 라이브러리 사용
+        print("[SHEETS] 서비스 계정 인증 생성 중...")
+        credentials = service_account.Credentials.from_service_account_info(
+            credentials_info, 
+            scopes=scopes
+        )
+        
+        # gspread 클라이언트 생성
+        print("[SHEETS] gspread 클라이언트 생성 중...")
+        gc = gspread.authorize(credentials)
+        
+        # 스프레드시트 열기
+        spreadsheet_url = "https://docs.google.com/spreadsheets/d/1rFRveVzw4w4abPaJ2hSr0F9CnyKx0-mTPykc852jaU8/edit"
+        print("[SHEETS] 스프레드시트 열기 중...")
         doc = gc.open_by_url(spreadsheet_url)
         
         # 시트 선택
         sheet = doc.worksheet("Orders의 사본")
         
-        print("Google Sheets 연결 성공")
+        print("✅ [SHEETS] Google Sheets 연결 성공!")
         return sheet
         
+    except json.JSONDecodeError as e:
+        print(f"❌ [SHEETS] JSON 파싱 실패: {e}")
+        return None
     except Exception as e:
-        print(f"Google Sheets 연결 실패: {e}")
+        print(f"❌ [SHEETS] Google Sheets 연결 실패: {e}")
+        print(f"[SHEETS] 오류 타입: {type(e).__name__}")
         return None
 
 def send_order_to_sheets(sender_id: str) -> bool:
