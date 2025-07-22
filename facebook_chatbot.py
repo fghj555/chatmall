@@ -350,6 +350,12 @@ def send_order_to_sheets(sender_id: str) -> bool:
         sheet = init_google_sheets()
         if not sheet:
             print("[SHEETS] Google Sheets 연결 실패")
+            # 실패 시 안내 메시지와 홈 버튼 제공
+            send_facebook_message(sender_id, 
+                "There was a temporary issue with our order processing system.\n")
+            import time
+            time.sleep(1)
+            send_go_home_card(sender_id)
             return False
         
         # 주문 데이터 및 사용자 데이터 가져오기
