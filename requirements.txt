@@ -16,7 +16,7 @@ langchain-milvus
 langchain
 
 # FAISS (※ 주의: 1.8.0은 pip 설치 불가. PyPI 기준 1.7.2까지 지원)
-faiss-cpu==1.7.2
+faiss-gpu==1.7.2
 
 # 데이터 처리 
 numpy==1.24.4
