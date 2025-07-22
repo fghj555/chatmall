@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAISS 검색 API 테스트</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(120deg, #f6f7f9, #dfe9f3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .chat-container {
+            width: 90%;
+            max-width: 600px;
+            height: 90%;
+            background: #ffffff;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: #4a90e2;
+            color: white;
+            text-align: center;
+            padding: 15px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 15px 15px 0 0;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f5f7fa;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .message {
+            padding: 10px 15px;
+            border-radius: 20px;
+            max-width: 70%;
+            font-size: 16px;
+        }
+
+        .user {
+            align-self: flex-end;
+            background: #4a90e2;
+            color: white;
+        }
+
+        .bot {
+            align-self: flex-start;
+            background: #e0e0e0;
+            color: black;
+        }
+
+        .chat-input {
+            display: flex;
+            border-top: 1px solid #ddd;
+            padding: 10px;
+            background: white;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            outline: none;
+            font-size: 16px;
+        }
+
+        .chat-input button {
+            padding: 10px 20px;
+            border: none;
+            background: #4a90e2;
+            color: white;
+            cursor: pointer;
+            border-radius: 20px;
+            margin-left: 10px;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+
+        .chat-input button:hover {
+            background: #357ab8;
+        }
+
+        .loading-spinner {
+            display: none;
+            margin: 0 auto;
+            border: 4px solid rgba(0, 0, 0, 0.2);
+            border-top: 4px solid #4a90e2;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        #json-results {
+            background: #e8e8e8;
+            padding: 10px;
+            border-radius: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="chat-container">
+        <div class="chat-header">💬 오너클랜 ChatBot</div>
+        <div class="chat-messages" id="chat-messages"></div>
+        <div id="loading-spinner" class="loading-spinner"></div>
+        <div class="chat-input">
+            <input type="text" id="user-input" placeholder="핵심 키워드를 입력하시면 정확한 검색이 됩니다." onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()">전송</button>
+            <button onclick="resetChat()">리셋</button>
+        </div>
+        <div class="chat-messages" id="json-results"></div>
+    </div>
+
+    <script>
+        // JSON 데이터를 HTML 요소로 변환하여 렌더링
+        function renderJsonToHtml(jsonData) {
+            if (typeof jsonData === "object" && jsonData !== null) {
+                let html = "<ul style='list-style: none; padding: 0;'>";
+                for (const key in jsonData) {
+                    if (Object.hasOwn(jsonData, key)) {
+                        const value = jsonData[key];
+                        if (typeof value === "string" && value.startsWith("http") && /\.(jpg|jpeg|png|gif)$/.test(value)) {
+                            html += `<li style="margin-bottom: 10px;"><strong>${key}:</strong><br><img src="${value}" alt="${key}" style="max-width: 200px; border-radius: 10px;"></li>`;
+                        } else if (typeof value === "string") {
+                            html += `<li style="margin-bottom: 10px;"><strong>${key}:</strong> ${value.replace(/\n/g, "<br>")}</li>`;
+                        } else if (typeof value === "object" && value !== null) {
+                            html += `<li style="margin-bottom: 10px;"><strong>${key}:</strong>${renderJsonToHtml(value)}</li>`;
+                        } else {
+                            html += `<li style="margin-bottom: 10px;"><strong>${key}:</strong> ${value}</li>`;
+                        }
+                    }
+                }
+                html += "</ul>";
+                return html;
+            }
+            return `<span>${jsonData}</span>`;
+        }
+
+        // 엔터 키로 메시지 전송 가능
+        function handleKeyPress(event) {
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+        }
+
+        async function sendMessage() {
+            const userInput = document.getElementById('user-input').value.trim();
+            if (!userInput) {
+                alert("질문을 입력해주세요!");
+                return;
+            }
+
+            const messageBox = document.getElementById('chat-messages');
+            const jsonBox = document.getElementById('json-results');
+            const spinner = document.getElementById('loading-spinner'); // 로딩 스피너
+
+            messageBox.innerHTML += `<div class="message user">👤 ${userInput}</div>`;
+            document.getElementById('user-input').value = '';
+            spinner.style.display = 'block'; // 로딩 애니메이션 표시
+
+            try {
+                const host = window.location.hostname === "localhost"
+                    ? "http://localhost:5050"
+                    : "https://satyr-inviting-quetzal.ngrok-free.app";
+
+                const response = await fetch(`${host}/chatbot`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: userInput })
+                });
+
+                const data = await response.json();
+
+                jsonBox.innerHTML = `<div class="message bot"><pre>${JSON.stringify(data, null, 2)}</pre></div>`;
+
+                if (data.results && data.results.length > 0) {
+                    data.results.forEach(item => {
+                        messageBox.innerHTML += `
+                            <div class="message bot">
+                                <strong>상품코드:</strong> ${item.상품코드}<br>
+                                <strong>제목:</strong> ${item.제목}<br>
+                                <strong>가격:</strong> ${item.가격}원<br>
+                                <strong>배송비:</strong> ${item.배송비}원<br>
+                                <strong>원산지:</strong> ${item.원산지}<br>
+                                <img src="${item.이미지}" alt="상품 이미지" style="width: 150px; border-radius: 10px;">
+                            </div>`;
+                    });
+                } else {
+                    messageBox.innerHTML += `<div class="message bot">❗ 검색 결과가 없습니다.</div>`;
+                }
+
+                const prettyHtml = renderJsonToHtml(data.response);
+                messageBox.innerHTML += `<div class="message bot"><strong>💡 챗봇 응답:</strong> ${prettyHtml}</div>`;
+            } catch (error) {
+                console.error("에러 발생:", error);
+                messageBox.innerHTML += `<div class="message bot">❗ 서버 연결 오류</div>`;
+            } finally {
+                spinner.style.display = 'none'; // 로딩 애니메이션 숨기기
+            }
+
+            messageBox.scrollTop = messageBox.scrollHeight;
+        }
+
+        async function resetChat() {
+            const messageBox = document.getElementById('chat-messages');
+            const jsonBox = document.getElementById('json-results');
+            const spinner = document.getElementById('loading-spinner'); // 로딩 스피너
+            const host = window.location.hostname === "localhost"
+                ? "http://localhost:5050"
+                : "https://satyr-inviting-quetzal.ngrok-free.app";
+
+            spinner.style.display = 'block'; // 로딩 애니메이션 표시
+            try {
+                const response = await fetch(`${host}/chatbot`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: "reset" })
+                });
+
+                const data = await response.json();
+
+                messageBox.innerHTML = `<div class="message bot">✅ ${data.message}</div>`;
+                jsonBox.innerHTML = '';
+                document.getElementById('user-input').value = '';
+            } catch (error) {
+                console.error("리셋 오류:", error);
+                messageBox.innerHTML += `<div class="message bot">❗ 리셋 요청 실패</div>`;
+            } finally {
+                spinner.style.display = 'none'; // 로딩 애니메이션 숨기기
+            }
+        }
+    </script>
+</body>
+
+</html>
