@@ -1,272 +1,1078 @@
 <!DOCTYPE html>
 <html lang="ko">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FAISS 검색 API 테스트</title>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
+    <title>ChatMall - AI Shopping Assistant</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Arial', sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(120deg, #f6f7f9, #dfe9f3);
+            min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            margin: 0;
+            padding: 20px;
         }
 
-        .chat-container {
-            width: 90%;
-            max-width: 600px;
-            height: 90%;
-            background: #ffffff;
-            border-radius: 15px;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-            display: flex;
-            flex-direction: column;
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.1);
             overflow: hidden;
         }
 
-        .chat-header {
-            background: #4a90e2;
+        .header {
+            background: linear-gradient(135deg, #1877f2, #42b883);
             color: white;
+            padding: 20px;
             text-align: center;
-            padding: 15px;
-            font-size: 20px;
+            font-size: 24px;
             font-weight: bold;
-            border-radius: 15px 15px 0 0;
         }
 
-        .chat-messages {
-            flex: 1;
+        .content {
+            padding: 30px;
+        }
+
+        .search-section {
+            margin-bottom: 30px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-input:focus {
+            border-color: #1877f2;
+        }
+
+        .search-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #1877f2, #42b883);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: transform 0.2s ease;
+        }
+
+        .search-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .search-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .results-section {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .ai-message {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #1877f2;
+        }
+
+        .product-grid {
+            display: grid;
+            gap: 20px;
+        }
+
+        .product-card {
+            border: 2px solid #eee;
+            border-radius: 15px;
             padding: 20px;
-            overflow-y: auto;
-            background: #f5f7fa;
-            display: flex;
-            flex-direction: column;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .product-card:hover {
+            border-color: #1877f2;
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        .product-card.selected {
+            border-color: #42b883;
+            background: #f0fff4;
+        }
+
+        .product-image {
+            width: 120px;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+
+        .product-name {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .product-price {
+            font-size: 16px;
+            color: #1877f2;
+            font-weight: bold;
+        }
+
+        .order-section {
+            display: none;
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 15px;
+        }
+
+        .order-step {
+            margin-bottom: 25px;
+        }
+
+        .step-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .options-grid {
+            display: grid;
             gap: 10px;
         }
 
-        .message {
-            padding: 10px 15px;
-            border-radius: 20px;
-            max-width: 70%;
-            font-size: 16px;
-        }
-
-        .user {
-            align-self: flex-end;
-            background: #4a90e2;
-            color: white;
-        }
-
-        .bot {
-            align-self: flex-start;
-            background: #e0e0e0;
-            color: black;
-        }
-
-        .chat-input {
-            display: flex;
-            border-top: 1px solid #ddd;
-            padding: 10px;
+        .option-item {
+            padding: 12px 15px;
             background: white;
-        }
-
-        .chat-input input {
-            flex: 1;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 20px;
-            outline: none;
-            font-size: 16px;
-        }
-
-        .chat-input button {
-            padding: 10px 20px;
-            border: none;
-            background: #4a90e2;
-            color: white;
+            border: 2px solid #ddd;
+            border-radius: 8px;
             cursor: pointer;
-            border-radius: 20px;
-            margin-left: 10px;
-            font-size: 16px;
-            transition: background 0.3s;
+            transition: all 0.3s ease;
         }
 
-        .chat-input button:hover {
-            background: #357ab8;
+        .option-item:hover {
+            border-color: #1877f2;
         }
 
-        .loading-spinner {
-            display: none;
-            margin: 0 auto;
-            border: 4px solid rgba(0, 0, 0, 0.2);
-            border-top: 4px solid #4a90e2;
+        .option-item.selected {
+            border-color: #42b883 !important;
+            background: #e8f5e8 !important;
+            color: #2d5a2d;
+            font-weight: bold;
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(66, 184, 131, 0.3);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #1877f2;
+        }
+
+        .quantity-input {
+            width: 100px;
+            text-align: center;
+        }
+
+        .price-summary {
+            background: #e7f3ff;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .price-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .total-price {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1877f2;
+            border-top: 2px solid #ddd;
+            padding-top: 10px;
+            margin-top: 10px;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+
+        .btn-primary {
+            background: #1877f2;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #166fe5;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #1877f2;
             border-radius: 50%;
             width: 30px;
             height: 30px;
             animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
         }
 
         @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
-        #json-results {
-            background: #e8e8e8;
-            padding: 10px;
-            border-radius: 10px;
-            font-family: monospace;
-            white-space: pre-wrap;
-            overflow-wrap: break-word;
-            margin-top: 10px;
+        .hidden {
+            display: none !important;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .header {
+                font-size: 20px;
+                padding: 15px;
+            }
         }
     </style>
 </head>
-
 <body>
-    <div class="chat-container">
-        <div class="chat-header">💬 오너클랜 ChatBot</div>
-        <div class="chat-messages" id="chat-messages"></div>
-        <div id="loading-spinner" class="loading-spinner"></div>
-        <div class="chat-input">
-            <input type="text" id="user-input" placeholder="핵심 키워드를 입력하시면 정확한 검색이 됩니다." onkeypress="handleKeyPress(event)">
-            <button onclick="sendMessage()">전송</button>
-            <button onclick="resetChat()">리셋</button>
+    <div class="container">
+        <div class="header">
+            🛍️ ChatMall AI Shopping Assistant
         </div>
-        <div class="chat-messages" id="json-results"></div>
+        
+        <div class="content">
+            <!-- 검색 섹션 -->
+            <div class="search-section">
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    class="search-input" 
+                    placeholder="찾고 싶은 상품을 입력하세요 (예: 무선 이어폰, 여름 원피스)"
+                    onkeypress="handleEnterKey(event)"
+                >
+                <button id="searchBtn" class="search-btn" onclick="searchProducts()">
+                    🔍 AI 상품 검색
+                </button>
+            </div>
+
+            <!-- 검색 결과 섹션 -->
+            <div id="resultsSection" class="results-section">
+                <div id="aiMessage" class="ai-message"></div>
+                <div id="productGrid" class="product-grid"></div>
+            </div>
+
+            <!-- 주문 섹션 -->
+            <div id="orderSection" class="order-section">
+                <!-- 옵션 선택 -->
+                <div id="optionStep" class="order-step hidden">
+                    <div class="step-title">⚙️ 옵션 선택</div>
+                    <div id="optionsGrid" class="options-grid"></div>
+                    <button class="btn btn-primary" onclick="skipOptions()" id="skipOptionsBtn" style="display: none;">
+                        옵션 없이 진행
+                    </button>
+                </div>
+
+                <!-- 수량 선택 -->
+                <div id="quantityStep" class="order-step hidden">
+                    <div class="step-title">🔢 수량 선택</div>
+                    <div class="form-group">
+                        <label class="form-label">수량:</label>
+                        <input type="number" id="quantityInput" class="form-input quantity-input" value="1" min="1" onchange="calculatePrice()">
+                        <div id="quantityInfo" style="margin-top: 10px; color: #666; font-size: 14px;"></div>
+                    </div>
+                    <div id="priceSummary" class="price-summary"></div>
+                    <button class="btn btn-primary" onclick="confirmQuantity()">주문 정보 입력하기</button>
+                </div>
+
+                <!-- 주문자 정보 -->
+                <div id="infoStep" class="order-step hidden">
+                    <div class="step-title">📝 주문자 정보</div>
+                    <div class="form-group">
+                        <label class="form-label">수령인 이름:</label>
+                        <input type="text" id="receiverName" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">배송 주소:</label>
+                        <textarea id="address" class="form-input" rows="3" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">연락처:</label>
+                        <input type="tel" id="phoneNumber" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">이메일:</label>
+                        <input type="email" id="email" class="form-input" required>
+                    </div>
+                    <button class="btn btn-success" onclick="submitOrderInfo()">주문 확인하기</button>
+                </div>
+
+                <!-- 최종 확인 -->
+                <div id="finalStep" class="order-step hidden">
+                    <div class="step-title">✅ 최종 주문 확인</div>
+                    <div id="finalSummary"></div>
+                    <div class="alert alert-success">
+                        <strong>💳 결제 안내:</strong><br>
+                        하나은행 841-910015-85404 (주)나로수<br>
+                        입금 후 아래 버튼을 클릭해주세요.
+                    </div>
+                    <button class="btn btn-success" onclick="completeOrder()">🎉 주문 완료</button>
+                </div>
+
+                <!-- 완료 -->
+                <div id="completedStep" class="order-step hidden">
+                    <div class="step-title">🎉 주문 완료</div>
+                    <div id="completionMessage"></div>
+                    <button class="btn btn-primary" onclick="startNewOrder()">새 주문 시작</button>
+                </div>
+            </div>
+
+            <!-- 로딩 -->
+            <div id="loading" class="loading hidden">
+                <div class="spinner"></div>
+                <div>처리 중입니다...</div>
+            </div>
+        </div>
     </div>
 
     <script>
-        // JSON 데이터를 HTML 요소로 변환하여 렌더링
-        function renderJsonToHtml(jsonData) {
-            if (typeof jsonData === "object" && jsonData !== null) {
-                let html = "<ul style='list-style: none; padding: 0;'>";
-                for (const key in jsonData) {
-                    if (Object.hasOwn(jsonData, key)) {
-                        const value = jsonData[key];
-                        if (typeof value === "string" && value.startsWith("http") && /\.(jpg|jpeg|png|gif)$/.test(value)) {
-                            html += `<li style="margin-bottom: 10px;"><strong>${key}:</strong><br><img src="${value}" alt="${key}" style="max-width: 200px; border-radius: 10px;"></li>`;
-                        } else if (typeof value === "string") {
-                            html += `<li style="margin-bottom: 10px;"><strong>${key}:</strong> ${value.replace(/\n/g, "<br>")}</li>`;
-                        } else if (typeof value === "object" && value !== null) {
-                            html += `<li style="margin-bottom: 10px;"><strong>${key}:</strong>${renderJsonToHtml(value)}</li>`;
-                        } else {
-                            html += `<li style="margin-bottom: 10px;"><strong>${key}:</strong> ${value}</li>`;
-                        }
-                    }
+        // 전역 변수
+        let sessionId = null;
+        let currentStep = 'search';
+        let selectedProduct = null;
+        let selectedOption = null;
+        let orderData = {};
+
+        // 서버 호스트
+        const getHost = () => {
+            return window.location.hostname === "localhost"
+                ? "http://localhost:5051"
+                : "https://polecat-precious-termite.ngrok-free.app";
+        };
+
+        // 통합 API 호출
+        async function callAPI(action, data = {}) {
+            try {
+                const response = await fetch(`${getHost()}/web/order`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: action,
+                        session_id: sessionId,
+                        ...data
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.session_id) {
+                    sessionId = result.session_id;
                 }
-                html += "</ul>";
-                return html;
-            }
-            return `<span>${jsonData}</span>`;
-        }
 
-        // 엔터 키로 메시지 전송 가능
-        function handleKeyPress(event) {
-            if (event.key === "Enter") {
-                sendMessage();
+                return result;
+            } catch (error) {
+                console.error('API 호출 오류:', error);
+                return { success: false, error: '서버 연결 오류가 발생했습니다.' };
             }
         }
 
-        async function sendMessage() {
-            const userInput = document.getElementById('user-input').value.trim();
-            if (!userInput) {
-                alert("질문을 입력해주세요!");
+        // 엔터 키 이벤트
+        function handleEnterKey(event) {
+            if (event.key === 'Enter') {
+                searchProducts();
+            }
+        }
+
+        // 상품 검색
+        async function searchProducts() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) {
+                alert('검색어를 입력해주세요!');
                 return;
             }
 
-            const messageBox = document.getElementById('chat-messages');
-            const jsonBox = document.getElementById('json-results');
-            const spinner = document.getElementById('loading-spinner'); // 로딩 스피너
+            showLoading(true);
+            hideElement('resultsSection');
+            hideElement('orderSection');
 
-            messageBox.innerHTML += `<div class="message user">👤 ${userInput}</div>`;
-            document.getElementById('user-input').value = '';
-            spinner.style.display = 'block'; // 로딩 애니메이션 표시
+            const result = await callAPI('search', { query: query });
 
-            try {
-                const host = window.location.hostname === "localhost"
-                    ? "http://localhost:5050"
-                    : "https://satyr-inviting-quetzal.ngrok-free.app";
+            showLoading(false);
 
-                const response = await fetch(`${host}/chatbot`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: userInput })
+            if (result.success) {
+                displaySearchResults(result);
+            } else {
+                showAlert(result.error || '검색 중 오류가 발생했습니다.', 'error');
+            }
+        }
+
+        // 검색 결과 표시
+        function displaySearchResults(result) {
+            console.log('검색 결과 표시:', result);
+            
+            if (result.message) {
+                document.getElementById('aiMessage').textContent = result.message;
+            }
+
+            const productGrid = document.getElementById('productGrid');
+            productGrid.innerHTML = '';
+
+            if (result.results && result.results.length > 0) {
+                result.results.forEach((product, index) => {
+                    console.log(`상품 ${index + 1}:`, product);
+                    
+                    const productCard = document.createElement('div');
+                    productCard.className = 'product-card';
+                    productCard.onclick = () => selectProduct(product.상품코드, index);
+                    
+                    productCard.innerHTML = `
+                        <div class="product-name">${product.제목}</div>
+                        <div class="product-price">💰 ${parseInt(product.가격).toLocaleString()}원</div>
+                        <div style="color: #666; margin-top: 5px;">🚚 배송비: ${parseInt(product.배송비).toLocaleString()}원</div>
+                        <div style="color: #666;">🌍 원산지: ${product.원산지}</div>
+                        ${product.이미지 ? `<img src="${product.이미지}" alt="상품 이미지" class="product-image">` : ''}
+                        <button class="btn btn-primary" style="margin-top: 15px; width: 100%;">이 상품 주문하기</button>
+                    `;
+                    
+                    productGrid.appendChild(productCard);
                 });
 
-                const data = await response.json();
+                // 결과 섹션 강제 표시
+                const resultsSection = document.getElementById('resultsSection');
+                resultsSection.style.display = 'block';
+                resultsSection.classList.remove('hidden');
+                console.log('검색 결과 섹션 표시됨');
+            } else {
+                document.getElementById('aiMessage').textContent = '검색 결과가 없습니다. 다른 키워드로 시도해보세요.';
+                const resultsSection = document.getElementById('resultsSection');
+                resultsSection.style.display = 'block';
+                resultsSection.classList.remove('hidden');
+            }
+        }
 
-                jsonBox.innerHTML = `<div class="message bot"><pre>${JSON.stringify(data, null, 2)}</pre></div>`;
+        // 상품 선택
+        async function selectProduct(productCode, index) {
+            console.log('상품 선택:', productCode, 'index:', index);
+            showLoading(true);
 
-                if (data.results && data.results.length > 0) {
-                    data.results.forEach(item => {
-                        messageBox.innerHTML += `
-                            <div class="message bot">
-                                <strong>상품코드:</strong> ${item.상품코드}<br>
-                                <strong>제목:</strong> ${item.제목}<br>
-                                <strong>가격:</strong> ${item.가격}원<br>
-                                <strong>배송비:</strong> ${item.배송비}원<br>
-                                <strong>원산지:</strong> ${item.원산지}<br>
-                                <img src="${item.이미지}" alt="상품 이미지" style="width: 150px; border-radius: 10px;">
-                            </div>`;
-                    });
-                } else {
-                    messageBox.innerHTML += `<div class="message bot">❗ 검색 결과가 없습니다.</div>`;
+            // 시각적 선택 표시
+            document.querySelectorAll('.product-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            if (document.querySelectorAll('.product-card')[index]) {
+                document.querySelectorAll('.product-card')[index].classList.add('selected');
+            }
+
+            const result = await callAPI('select_product', { product_code: productCode });
+            console.log('🔍 상품 선택 API 전체 응답:', result);
+
+            showLoading(false);
+
+            if (result.success) {
+                selectedProduct = result.product;
+                console.log('✅ 선택된 상품:', selectedProduct);
+                
+                // 디버그 정보 출력
+                if (result.debug_info) {
+                    console.log('🐛 디버그 정보:');
+                    console.log('   - 원본 옵션 데이터:', result.debug_info.raw_options);
+                    console.log('   - 파싱된 옵션 수:', result.debug_info.parsed_count);
                 }
+                
+                console.log('📋 받은 옵션 목록:', result.options);
+                console.log('📊 옵션 개수:', result.options ? result.options.length : 0);
+                console.log('🔍 옵션 있음 여부:', result.has_options);
+                
+                // 주문 섹션 강제 표시
+                const orderSection = document.getElementById('orderSection');
+                orderSection.style.display = 'block';
+                orderSection.classList.remove('hidden');
+                console.log('주문 섹션 표시됨');
 
-                const prettyHtml = renderJsonToHtml(data.response);
-                messageBox.innerHTML += `<div class="message bot"><strong>💡 챗봇 응답:</strong> ${prettyHtml}</div>`;
-            } catch (error) {
-                console.error("에러 발생:", error);
-                messageBox.innerHTML += `<div class="message bot">❗ 서버 연결 오류</div>`;
-            } finally {
-                spinner.style.display = 'none'; // 로딩 애니메이션 숨기기
+                if (result.has_options && result.options && result.options.length > 0) {
+                    console.log('✅ 옵션이 있어서 옵션 표시 함수 호출');
+                    displayOptions(result.options);
+                } else {
+                    console.log('⚠️ 옵션이 없어서 바로 수량 선택으로');
+                    skipOptions();
+                }
+            } else {
+                console.error('❌ 상품 선택 실패:', result.error);
+                showAlert(result.error || '상품 선택 중 오류가 발생했습니다.', 'error');
             }
-
-            messageBox.scrollTop = messageBox.scrollHeight;
         }
 
-        async function resetChat() {
-            const messageBox = document.getElementById('chat-messages');
-            const jsonBox = document.getElementById('json-results');
-            const spinner = document.getElementById('loading-spinner'); // 로딩 스피너
-            const host = window.location.hostname === "localhost"
-                ? "http://localhost:5050"
-                : "https://satyr-inviting-quetzal.ngrok-free.app";
+        // 옵션 표시
+        function displayOptions(options) {
+            console.log('🎯 옵션 표시 함수 시작');
+            console.log('📋 받은 옵션 배열:', options);
+            console.log('📊 옵션 배열 길이:', options.length);
+            
+            // 각 옵션 상세 출력
+            options.forEach((option, index) => {
+                console.log(`   옵션 ${index + 1}:`, option);
+                console.log(`     - 이름: ${option.name}`);
+                console.log(`     - 추가금액: ${option.extra_price}`);
+                console.log(`     - 표시명: ${option.display}`);
+            });
+            
+            const optionsGrid = document.getElementById('optionsGrid');
+            console.log('🔍 옵션 그리드 요소:', optionsGrid);
+            
+            // 기존 옵션 제거
+            optionsGrid.innerHTML = '';
+            console.log('🧹 기존 옵션 제거 완료');
 
-            spinner.style.display = 'block'; // 로딩 애니메이션 표시
-            try {
-                const response = await fetch(`${host}/chatbot`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: "reset" })
+            // 각 옵션을 DOM에 추가
+            options.forEach((option, index) => {
+                console.log(`🔨 옵션 ${index + 1} DOM 생성 중: ${option.display}`);
+                
+                const optionItem = document.createElement('div');
+                optionItem.className = 'option-item';
+                optionItem.id = `option-${index}`;
+                optionItem.textContent = option.display;
+                
+                // 클릭 이벤트 설정
+                optionItem.onclick = () => {
+                    console.log(`🖱️ 옵션 ${index + 1} 클릭됨:`, option.name);
+                    selectOption(option.name, option.extra_price, index);
+                };
+                
+                // 호버 효과 추가
+                optionItem.addEventListener('mouseenter', function() {
+                    console.log(`🖱️ 옵션 ${index + 1} 마우스 진입`);
+                    if (!this.classList.contains('selected')) {
+                        this.style.borderColor = '#1877f2';
+                        this.style.backgroundColor = '#f0f9ff';
+                    }
                 });
+                
+                optionItem.addEventListener('mouseleave', function() {
+                    if (!this.classList.contains('selected')) {
+                        this.style.borderColor = '#ddd';
+                        this.style.backgroundColor = 'white';
+                    }
+                });
+                
+                optionsGrid.appendChild(optionItem);
+                console.log(`✅ 옵션 ${index + 1} DOM 추가 완료`);
+            });
 
-                const data = await response.json();
+            console.log('🎯 옵션 그리드에 추가된 총 옵션 수:', optionsGrid.children.length);
 
-                messageBox.innerHTML = `<div class="message bot">✅ ${data.message}</div>`;
-                jsonBox.innerHTML = '';
-                document.getElementById('user-input').value = '';
-            } catch (error) {
-                console.error("리셋 오류:", error);
-                messageBox.innerHTML += `<div class="message bot">❗ 리셋 요청 실패</div>`;
-            } finally {
-                spinner.style.display = 'none'; // 로딩 애니메이션 숨기기
+            // 옵션 단계 강제 표시
+            const optionStep = document.getElementById('optionStep');
+            optionStep.style.display = 'block';
+            optionStep.classList.remove('hidden');
+            
+            const skipBtn = document.getElementById('skipOptionsBtn');
+            skipBtn.style.display = 'block';
+            
+            console.log('✅ 옵션 단계 UI 표시 완료');
+            console.log('📊 최종 상태:');
+            console.log('   - 옵션 단계 표시됨:', !optionStep.classList.contains('hidden'));
+            console.log('   - 옵션 항목 수:', optionsGrid.children.length);
+            console.log('   - 건너뛰기 버튼 표시:', skipBtn.style.display === 'block');
+        }
+
+        // 옵션 선택
+        async function selectOption(optionName, extraPrice, index) {
+            console.log('옵션 선택:', optionName, extraPrice, index);
+            
+            // 시각적 선택 표시
+            document.querySelectorAll('.option-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            const optionItems = document.querySelectorAll('.option-item');
+            if (optionItems[index]) {
+                optionItems[index].classList.add('selected');
+                console.log('옵션 시각적 선택 완료');
+            }
+
+            // API 호출
+            const result = await callAPI('select_option', {
+                option_name: optionName,
+                extra_price: extraPrice
+            });
+
+            console.log('옵션 선택 API 결과:', result);
+
+            if (result.success) {
+                selectedOption = { name: optionName, extra_price: extraPrice };
+                console.log('옵션 선택 성공, 1.5초 후 수량 단계로 이동');
+                
+                // 선택 완료 메시지 표시
+                showAlert(`✅ 옵션 선택 완료: ${optionName}`, 'success');
+                
+                setTimeout(() => {
+                    console.log('옵션 단계 숨기기');
+                    // 옵션 단계 숨기기
+                    const optionStep = document.getElementById('optionStep');
+                    optionStep.style.display = 'none';
+                    optionStep.classList.add('hidden');
+                    
+                    console.log('수량 단계 표시 시작');
+                    showQuantityStep();
+                }, 1500);
+            } else {
+                console.error('옵션 선택 실패:', result.error);
+                showAlert(result.error || '옵션 선택 중 오류가 발생했습니다.', 'error');
             }
         }
+
+        // 옵션 건너뛰기
+        async function skipOptions() {
+            console.log('옵션 건너뛰기');
+            
+            // 기본 옵션으로 설정
+            const result = await callAPI('select_option', {
+                option_name: '기본옵션',
+                extra_price: 0
+            });
+
+            if (result.success) {
+                selectedOption = { name: '기본옵션', extra_price: 0 };
+                console.log('기본 옵션 설정 완료');
+                
+                // 옵션 단계 숨기기
+                const optionStep = document.getElementById('optionStep');
+                optionStep.style.display = 'none';
+                optionStep.classList.add('hidden');
+                
+                showQuantityStep();
+            } else {
+                // API 실패시에도 진행 (클라이언트에서만 처리)
+                selectedOption = { name: '기본옵션', extra_price: 0 };
+                console.log('API 실패했지만 기본 옵션으로 진행');
+                
+                const optionStep = document.getElementById('optionStep');
+                optionStep.style.display = 'none';
+                optionStep.classList.add('hidden');
+                
+                showQuantityStep();
+            }
+        }
+
+        // 수량 선택 단계 표시
+        function showQuantityStep() {
+            console.log('수량 선택 단계 표시');
+            
+            // 수량 단계 강제 표시
+            const quantityStep = document.getElementById('quantityStep');
+            quantityStep.style.display = 'block';
+            quantityStep.classList.remove('hidden');
+            
+            console.log('수량 단계 표시됨');
+            calculatePrice();
+        }
+
+        // 가격 계산
+        async function calculatePrice() {
+            const quantity = parseInt(document.getElementById('quantityInput').value) || 1;
+
+            const result = await callAPI('set_quantity', { quantity: quantity });
+
+            if (result.success) {
+                const summary = result.order_summary;
+
+                // 수량 정보 표시
+                let quantityInfo = `📦 주문 수량: ${quantity}개`;
+                if (summary.bundle_size > 0 && summary.bundles_needed > 1) {
+                    quantityInfo += `<br>📦 묶음배송: ${summary.bundle_size}개씩 × ${summary.bundles_needed}묶음`;
+                }
+                document.getElementById('quantityInfo').innerHTML = quantityInfo;
+
+                // 가격 요약 표시
+                const priceSummary = document.getElementById('priceSummary');
+                priceSummary.innerHTML = `
+                    <div class="price-row">
+                        <span>상품 단가:</span>
+                        <span>${summary.unit_price.toLocaleString()}원</span>
+                    </div>
+                    ${summary.extra_price > 0 ? `
+                    <div class="price-row">
+                        <span>옵션 추가:</span>
+                        <span>+${summary.extra_price.toLocaleString()}원</span>
+                    </div>` : ''}
+                    <div class="price-row">
+                        <span>상품 소계:</span>
+                        <span>${summary.item_total.toLocaleString()}원</span>
+                    </div>
+                    <div class="price-row">
+                        <span>배송비:</span>
+                        <span>${summary.shipping_fee.toLocaleString()}원</span>
+                    </div>
+                    <div class="price-row total-price">
+                        <span>총 결제금액:</span>
+                        <span>${summary.total_price.toLocaleString()}원</span>
+                    </div>
+                `;
+
+                orderData = summary;
+            }
+        }
+
+        // 수량 확인
+        function confirmQuantity() {
+            const quantity = parseInt(document.getElementById('quantityInput').value);
+            if (!quantity || quantity < 1) {
+                alert('올바른 수량을 입력해주세요.');
+                return;
+            }
+
+            console.log('수량 확인됨, 정보 입력 단계로 이동');
+            
+            // 수량 단계 숨기기
+            const quantityStep = document.getElementById('quantityStep');
+            quantityStep.style.display = 'none';
+            quantityStep.classList.add('hidden');
+            
+            // 정보 입력 단계 표시
+            const infoStep = document.getElementById('infoStep');
+            infoStep.style.display = 'block';
+            infoStep.classList.remove('hidden');
+            
+            console.log('정보 입력 단계 표시됨');
+        }
+
+        // 주문자 정보 제출
+        async function submitOrderInfo() {
+            const receiverName = document.getElementById('receiverName').value.trim();
+            const address = document.getElementById('address').value.trim();
+            const phoneNumber = document.getElementById('phoneNumber').value.trim();
+            const email = document.getElementById('email').value.trim();
+
+            if (!receiverName || !address || !phoneNumber || !email) {
+                alert('모든 필수 정보를 입력해주세요.');
+                return;
+            }
+
+            console.log('주문자 정보 제출');
+            showLoading(true);
+
+            const result = await callAPI('submit_info', {
+                receiver_name: receiverName,
+                address: address,
+                phone_number: phoneNumber,
+                email: email
+            });
+
+            console.log('주문자 정보 제출 결과:', result);
+            showLoading(false);
+
+            if (result.success) {
+                // 정보 입력 단계 숨기기
+                const infoStep = document.getElementById('infoStep');
+                infoStep.style.display = 'none';
+                infoStep.classList.add('hidden');
+                
+                console.log('정보 입력 완료, 최종 요약으로 이동');
+                showFinalSummary();
+            } else {
+                showAlert(result.error || '주문 정보 저장 중 오류가 발생했습니다.', 'error');
+            }
+        }
+
+        // 최종 요약 표시
+        function showFinalSummary() {
+            console.log('최종 요약 표시');
+            
+            const receiverName = document.getElementById('receiverName').value;
+            const address = document.getElementById('address').value;
+
+            document.getElementById('finalSummary').innerHTML = `
+                <div class="alert alert-success">
+                    <strong>📋 주문 최종 확인:</strong><br><br>
+                    <strong>👤 수령인:</strong> ${receiverName}<br>
+                    <strong>📦 상품:</strong> ${selectedProduct.name}<br>
+                    <strong>⚙️ 옵션:</strong> ${selectedOption.name}<br>
+                    <strong>🔢 수량:</strong> ${orderData.quantity}개<br>
+                    <strong>🏠 배송지:</strong> ${address}<br><br>
+                    <div class="total-price">
+                        💰 총 결제금액: ${orderData.total_price.toLocaleString()}원
+                    </div>
+                </div>
+            `;
+
+            // 최종 단계 강제 표시
+            const finalStep = document.getElementById('finalStep');
+            finalStep.style.display = 'block';
+            finalStep.classList.remove('hidden');
+            
+            console.log('최종 단계 표시됨');
+        }
+
+        // 주문 완료
+        async function completeOrder() {
+            console.log('주문 완료 처리 시작');
+            showLoading(true);
+
+            const result = await callAPI('complete');
+            console.log('주문 완료 결과:', result);
+
+            showLoading(false);
+
+            if (result.success) {
+                // 최종 단계 숨기기
+                const finalStep = document.getElementById('finalStep');
+                finalStep.style.display = 'none';
+                finalStep.classList.add('hidden');
+                
+                document.getElementById('completionMessage').innerHTML = `
+                    <div class="alert alert-success">
+                        <strong>🎉 주문이 성공적으로 완료되었습니다!</strong><br><br>
+                        <strong>📋 주문번호:</strong> ${result.order_number}<br>
+                        <strong>⏰ 주문시간:</strong> ${result.order_details.timestamp}<br>
+                        <strong>💰 결제금액:</strong> ${result.order_details.total_price.toLocaleString()}원<br><br>
+                        💳 입금 확인 후 상품 준비에 들어갑니다.</p>
+                    </div>
+                `;
+
+                // 완료 단계 표시
+                const completedStep = document.getElementById('completedStep');
+                completedStep.style.display = 'block';
+                completedStep.classList.remove('hidden');
+                
+                console.log('주문 완료 단계 표시됨');
+            } else {
+                showAlert(result.error || '주문 완료 처리 중 오류가 발생했습니다.', 'error');
+            }
+        }
+
+        // 새 주문 시작
+        async function startNewOrder() {
+            await callAPI('reset');
+            
+            // UI 초기화
+            sessionId = null;
+            currentStep = 'search';
+            selectedProduct = null;
+            selectedOption = null;
+            orderData = {};
+
+            document.getElementById('searchInput').value = '';
+            hideElement('resultsSection');
+            hideElement('orderSection');
+            hideAllSteps();
+
+            // 폼 초기화
+            document.getElementById('receiverName').value = '';
+            document.getElementById('address').value = '';
+            document.getElementById('phoneNumber').value = '';
+            document.getElementById('email').value = '';
+            document.getElementById('quantityInput').value = 1;
+
+            showAlert('🔄 새로운 주문을 시작합니다!', 'success');
+        }
+
+        // 유틸리티 함수들 개선
+        function showElement(id) {
+            console.log('요소 표시:', id);
+            const element = document.getElementById(id);
+            if (element) {
+                element.style.display = 'block';
+                element.classList.remove('hidden');
+                console.log(`${id} 표시됨`);
+            } else {
+                console.error(`요소를 찾을 수 없음: ${id}`);
+            }
+        }
+
+        function hideElement(id) {
+            console.log('요소 숨기기:', id);
+            const element = document.getElementById(id);
+            if (element) {
+                element.style.display = 'none';
+                element.classList.add('hidden');
+                console.log(`${id} 숨겨짐`);
+            }
+        }
+
+        function hideAllSteps() {
+            console.log('모든 단계 숨기기');
+            const steps = ['optionStep', 'quantityStep', 'infoStep', 'finalStep', 'completedStep'];
+            steps.forEach(step => {
+                const element = document.getElementById(step);
+                if (element) {
+                    element.style.display = 'none';
+                    element.classList.add('hidden');
+                }
+            });
+        }
+
+        function showLoading(show) {
+            if (show) {
+                showElement('loading');
+            } else {
+                hideElement('loading');
+            }
+        }
+
+        function showAlert(message, type) {
+            console.log('알림 표시:', message, type);
+            
+            // 기존 알림 제거
+            const existingAlert = document.querySelector('.temp-alert');
+            if (existingAlert) {
+                existingAlert.remove();
+            }
+
+            // 새 알림 생성
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} temp-alert`;
+            alert.style.position = 'fixed';
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.zIndex = '10000';
+            alert.style.maxWidth = '300px';
+            alert.style.animation = 'slideIn 0.3s ease-out';
+            alert.textContent = message;
+
+            // 슬라이드 인 애니메이션 CSS 추가
+            if (!document.querySelector('#alert-animations')) {
+                const style = document.createElement('style');
+                style.id = 'alert-animations';
+                style.textContent = `
+                    @keyframes slideIn {
+                        from { transform: translateX(100%); opacity: 0; }
+                        to { transform: translateX(0); opacity: 1; }
+                    }
+                    @keyframes slideOut {
+                        from { transform: translateX(0); opacity: 1; }
+                        to { transform: translateX(100%); opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            // 3초 후 제거
+            setTimeout(() => {
+                if (alert.parentElement) {
+                    alert.style.animation = 'slideOut 0.3s ease-out';
+                    setTimeout(() => {
+                        if (alert.parentElement) {
+                            alert.remove();
+                        }
+                    }, 300);
+                }
+            }, 3000);
+
+            // body에 추가
+            document.body.appendChild(alert);
+        }
+
+        // 페이지 로드시 서버 상태 확인
+        window.addEventListener('load', async function() {
+            try {
+                const response = await fetch(`${getHost()}/health`);
+                const data = await response.json();
+                console.log('✅ 서버 상태:', data);
+            } catch (error) {
+                console.error('❌ 서버 연결 실패:', error);
+                showAlert('⚠️ 서버 연결 상태를 확인해주세요.', 'error');
+            }
+        });
     </script>
 </body>
-
 </html>
