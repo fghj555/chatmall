@@ -3088,42 +3088,139 @@ async def product_preview(html: str):
 
 
 # ✅ 디버깅용 요청 모델 추가
-class DebugRequest(BaseModel):
-    query: str
+class ExtendedChatmallRequest(BaseModel):
+    # 기존 검색용
+    query: Optional[str] = None
     session_id: Optional[str] = None
+    
+    # 주문 과정용 필드들 추가
+    action: Optional[str] = "search"  # "search", "select_product", "select_option", "set_quantity", "submit_info", "complete", "go_home", "reset"
+    
+    # 상품 선택용
+    product_code: Optional[str] = None
+    
+    # 옵션 선택용
+    option_name: Optional[str] = None
+    extra_price: Optional[int] = 0
+    
+    # 수량 설정용
+    quantity: Optional[int] = 1
+    
+    # 주문 정보용
+    receiver_name: Optional[str] = None
+    address: Optional[str] = None
+    phone_number: Optional[str] = None
+    email: Optional[str] = None
 
-# =========================================================================
-# 기존 엔드포인트들 아래에 디버깅 엔드포인트 추가
-# =========================================================================
 
-# ✅ 디버깅 엔드포인트 - AI 검색 테스트용
+
 @app.post("/chatmall")
-async def debug_search(data: DebugRequest):
+async def extended_chatmall_endpoint(data: ExtendedChatmallRequest):
     """
-    external_search_and_generate_response를 바로 호출해서
-    결과 payload를 JSON으로 반환합니다.
-    Facebook Messenger 없이 AI 검색 기능을 테스트할 수 있습니다.
+    챗몰 통합 엔드포인트
     """
     try:
-        print(f"🔍 [DEBUG_SEARCH] 디버그 검색 요청: {data.query}")
-        print(f"🔍 [DEBUG_SEARCH] 세션 ID: {data.session_id}")
+        print(f"🔍 [EXTENDED_CHATMALL] 요청: action={data.action}")
         
-        # session_id가 없으면 기본값 설정
-        session_id = data.session_id or "debug_session"
+        # 세션 ID 생성/확인
+        session_id = data.session_id or f"chatmall_{int(time.time())}_{random.randint(1000, 9999)}"
         
-        # external_search_and_generate_response 직접 호출
+        # 액션별 처리
+        if data.action == "search":
+            return await handle_chatmall_search(data, session_id)
+        
+        elif data.action == "select_product":
+            return await handle_chatmall_select_product(data, session_id)
+        
+        elif data.action == "select_option":
+            return await handle_chatmall_select_option(data, session_id)
+        
+        elif data.action == "set_quantity":
+            return await handle_chatmall_set_quantity(data, session_id)
+        
+        elif data.action == "submit_info":
+            return await handle_chatmall_submit_info(data, session_id)
+        
+        elif data.action == "complete":
+            return await handle_chatmall_complete(data, session_id)
+        
+        elif data.action == "go_home":
+            return await handle_chatmall_go_home(data, session_id)
+        
+        elif data.action == "reset":
+            return await handle_chatmall_reset(data, session_id)
+        
+        # 기본값: 검색 (기존 호환성 유지)
+        else:
+            if data.query:
+                return await handle_chatmall_search(data, session_id)
+            else:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "status": "error",
+                        "error": "query 또는 유효한 action이 필요합니다",
+                        "valid_actions": ["search", "select_product", "select_option", "set_quantity", "submit_info", "complete", "go_home", "reset"]
+                    }
+                )
+        
+    except Exception as e:
+        print(f"❌ [EXTENDED_CHATMALL] 오류 발생: {e}")
+        import traceback
+        error_detail = traceback.format_exc()
+        
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "error": str(e),
+                "error_detail": error_detail,
+                "action": data.action
+            }
+        )
+
+# ============================================================================
+# 각 단계별 처리 함수들
+# ============================================================================
+
+async def handle_chatmall_search(data: ExtendedChatmallRequest, session_id: str):
+    """1단계: 검색 처리"""
+    try:
+        if not data.query:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "error": "검색어가 필요합니다"}
+            )
+        
+        print(f"🔍 [CHATMALL_SEARCH] 검색 요청: {data.query}")
+        print(f"🔍 [CHATMALL_SEARCH] 세션 ID: {session_id}")
+        
+        # AI 검색 실행
         result = external_search_and_generate_response(data.query, session_id)
         
-        print(f"✅ [DEBUG_SEARCH] 검색 완료 - 결과 개수: {len(result.get('results', []))}")
+        print(f"✅ [CHATMALL_SEARCH] 검색 완료 - 결과 개수: {len(result.get('results', []))}")
         
-        # 응답 구조 정리
-        debug_response = {
+        # 상품 캐시에 저장
+        products = result.get("results", [])
+        for product in products:
+            product_code = product.get("상품코드")
+            if product_code:
+                PRODUCT_CACHE[product_code] = product
+        
+        # 응답 구조
+        response = {
             "status": "success",
-            "query": data.query,
+            "action": "search",
             "session_id": session_id,
-            "total_results": len(result.get("results", [])),
+            "query": data.query,
+            "total_results": len(products),
             "ai_message": result.get("combined_message_text", ""),
-            "products": result.get("results", []),
+            "products": products,
+            "next_action": "select_product",
+            "navigation": {
+                "can_go_home": True,
+                "can_reset": True
+            },
             "debug_info": {
                 "preprocessed_query": result.get("UserMessage", ""),
                 "context": result.get("RawContext", []),
@@ -3131,464 +3228,440 @@ async def debug_search(data: DebugRequest):
             }
         }
         
-        return JSONResponse(content=debug_response)
+        return JSONResponse(content=response)
         
     except Exception as e:
-        print(f"❌ [DEBUG_SEARCH] 오류 발생: {e}")
-        import traceback
-        error_detail = traceback.format_exc()
-        
+        print(f"❌ [CHATMALL_SEARCH] 오류: {e}")
         return JSONResponse(
-            status_code=500, 
-            content={
-                "status": "error",
-                "error": str(e),
-                "error_detail": error_detail,
-                "query": data.query
-            }
+            status_code=500,
+            content={"status": "error", "error": str(e), "action": "search"}
         )
 
-# 웹 세션 관리
-class WebOrderManager:
-    """웹 주문 통합 관리"""
-    
-    @staticmethod
-    def get_session_data(session_id: str):
-        """세션 데이터 조회"""
-        all_data = load_json_data("web_orders.json")
-        if session_id not in all_data:
-            all_data[session_id] = {
-                "step": "search",  # search, product_selected, order_info, completed
-                "product_code": None,
-                "product_name": None,
-                "product_info": {},
-                "selected_option": "기본옵션",
-                "extra_price": 0,
-                "quantity": 1,
-                "unit_price": 0,
-                "shipping_fee": 0,
-                "total_price": 0,
-                "receiver_name": None,
-                "address": None,
-                "phone_number": None,
-                "email": None,
-                "last_updated": time.time()
-            }
-            save_json_data("web_orders.json", all_data)
-        return all_data[session_id]
-    
-    @staticmethod
-    def update_session_data(session_id: str, **kwargs):
-        """세션 데이터 업데이트"""
-        all_data = load_json_data("web_orders.json")
-        if session_id not in all_data:
-            all_data[session_id] = {
-                "step": "search",
-                "product_code": None,
-                "product_name": None,
-                "product_info": {},
-                "selected_option": "기본옵션",
-                "extra_price": 0,
-                "quantity": 1,
-                "unit_price": 0,
-                "shipping_fee": 0,
-                "total_price": 0,
-                "receiver_name": None,
-                "address": None,
-                "phone_number": None,
-                "email": None,
-                "last_updated": time.time()
-            }
-        
-        all_data[session_id].update(kwargs)
-        all_data[session_id]["last_updated"] = time.time()
-        save_json_data("web_orders.json", all_data)
-
-# 웹 주문 엔드포인트
-@app.post("/web/order")
-async def unified_web_order(request: Request):
-    """통합 웹 주문 처리 엔드포인트"""
+async def handle_chatmall_select_product(data: ExtendedChatmallRequest, session_id: str):
+    """2단계: 상품 선택 처리"""
     try:
-        data = await request.json()
-        
-        # 세션 ID 생성 로직 개선
-        provided_session_id = data.get("session_id")
-        if not provided_session_id or provided_session_id == "null":
-            session_id = f"web_{int(time.time())}_{random.randint(1000, 9999)}"
-            print(f"🆕 [SESSION] 새 세션 ID 생성: {session_id}")
-        else:
-            session_id = provided_session_id
-            print(f"📝 [SESSION] 기존 세션 ID 사용: {session_id}")
-        
-        action = data.get("action")
-        print(f"🌐 [WEB_ORDER] 액션: {action}, 세션: {session_id}")
-        
-        # 1. 상품 검색
-        if action == "search":
-            query = data.get("query", "").strip()
-            if not query:
-                return {"success": False, "error": "검색어를 입력해주세요"}
-            
-            print(f"🔍 [SEARCH] 검색어: '{query}', 세션: '{session_id}'")
-            
-            # AI 검색 실행 (세션 ID가 문자열인지 확인)
-            try:
-                if not isinstance(session_id, str):
-                    session_id = str(session_id)
-                    
-                loop = asyncio.get_running_loop()
-                search_result = await asyncio.wait_for(
-                    loop.run_in_executor(executor, external_search_and_generate_response, query, session_id),
-                    timeout=30.0
-                )
-                
-                # 상품 캐시에 저장
-                if isinstance(search_result, dict) and search_result.get("results"):
-                    for product in search_result["results"]:
-                        product_code = product.get("상품코드")
-                        if product_code:
-                            PRODUCT_CACHE[product_code] = product
-                    print(f"💾 [CACHE] {len(search_result['results'])}개 상품 캐시 저장")
-                
-                return {
-                    "success": True,
-                    "session_id": session_id,
-                    "step": "search",
-                    "results": search_result.get("results", []),
-                    "message": search_result.get("combined_message_text", "")
-                }
-                
-            except asyncio.TimeoutError:
-                print(f"⏱️ [TIMEOUT] 검색 타임아웃")
-                return {"success": False, "session_id": session_id, "error": "검색 시간이 초과되었습니다"}
-            except Exception as e:
-                print(f"❌ [SEARCH_ERROR] {e}")
-                import traceback
-                print(f"❌ [SEARCH_TRACE] {traceback.format_exc()}")
-                return {"success": False, "session_id": session_id, "error": "검색 중 오류가 발생했습니다"}
-        
-        # 2. 상품 선택
-        elif action == "select_product":
-            product_code = data.get("product_code")
-            if not product_code or product_code not in PRODUCT_CACHE:
-                return {"success": False, "session_id": session_id, "error": "유효하지 않은 상품입니다"}
-            
-            product = PRODUCT_CACHE[product_code]
-            
-            # 옵션 파싱 개선
-            options = []
-            options_raw = product.get("조합형옵션", "")
-            print(f"🔍 [OPTIONS_RAW] 원본 옵션 데이터: '{options_raw}'")
-            
-            if options_raw and str(options_raw).lower() not in ["nan", "", "none", "null"]:
-                # 줄바꿈으로 분리
-                if '\n' in str(options_raw):
-                    option_lines = str(options_raw).split("\n")
-                    print(f"📋 [OPTIONS_SPLIT] 줄바꿈으로 분리: {option_lines}")
-                else:
-                    # 줄바꿈이 없으면 패턴으로 분리 시도
-                    import re
-                    pattern = r'([^,]+,\d+,\d+)'
-                    matches = re.findall(pattern, str(options_raw))
-                    if matches:
-                        option_lines = matches
-                        print(f"📋 [OPTIONS_REGEX] 패턴으로 분리: {option_lines}")
-                    else:
-                        # 패턴도 안 맞으면 전체를 하나의 옵션으로
-                        option_lines = [str(options_raw)]
-                        print(f"📋 [OPTIONS_SINGLE] 단일 옵션으로 처리: {option_lines}")
-                
-                print(f"📊 [OPTIONS_COUNT] 총 옵션 라인 수: {len(option_lines)}")
-                
-                for i, line in enumerate(option_lines):
-                    line = line.strip()
-                    print(f"🔍 [OPTION_{i}] 처리 중: '{line}'")
-                    
-                    if line:
-                        try:
-                            parts = line.split(",")
-                            print(f"📝 [OPTION_{i}_PARTS] 분리된 부분: {parts}")
-                            
-                            if len(parts) >= 2:
-                                name = parts[0].strip()
-                                try:
-                                    extra_price = int(float(parts[1].strip())) if parts[1].strip() else 0
-                                except (ValueError, TypeError):
-                                    extra_price = 0
-                                
-                                option_obj = {
-                                    "name": name,
-                                    "extra_price": extra_price,
-                                    "display": f"{name} (+{extra_price:,}원)" if extra_price > 0 else name
-                                }
-                                options.append(option_obj)
-                                print(f"✅ [OPTION_{i}_SUCCESS] 옵션 추가: {option_obj}")
-                            else:
-                                print(f"⚠️ [OPTION_{i}_SKIP] 부족한 파트 수: {len(parts)}")
-                        except Exception as e:
-                            print(f"❌ [OPTION_{i}_ERROR] 파싱 오류: {e}")
-                            continue
-            
-            print(f"🎯 [OPTIONS_FINAL] 최종 옵션 수: {len(options)}")
-            for i, opt in enumerate(options):
-                print(f"   {i+1}. {opt['display']} (추가금액: {opt['extra_price']}원)")
-            
-            # 세션 업데이트
-            WebOrderManager.update_session_data(
-                session_id,
-                step="product_selected",
-                product_code=product_code,
-                product_name=product.get('제목', '상품'),
-                product_info=product,
-                unit_price=int(float(product.get("가격", 0) or 0)),
-                shipping_fee=int(float(product.get("배송비", 0) or 0))
+        if not data.product_code:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "error": "product_code가 필요합니다"}
             )
-            
-            return {
-                "success": True,
-                "session_id": session_id,
-                "step": "product_selected",
-                "product": {
-                    "code": product_code,
-                    "name": product.get('제목', '상품'),
-                    "price": int(float(product.get("가격", 0) or 0)),
-                    "shipping": int(float(product.get("배송비", 0) or 0)),
-                    "image": product.get('이미지', ''),
-                    "bundle_size": int(float(product.get("최대구매수량", 0) or 0))
-                },
-                "options": options,
-                "has_options": len(options) > 0,
-                "debug_info": {
-                    "raw_options": str(options_raw),
-                    "parsed_count": len(options)
-                }
-            }
         
-        # 3. 옵션 선택
-        elif action == "select_option":
-            option_name = data.get("option_name", "기본옵션")
-            extra_price = data.get("extra_price", 0)
-            
-            WebOrderManager.update_session_data(
-                session_id,
-                selected_option=f"{option_name}" + (f" (+{extra_price:,}원)" if extra_price > 0 else ""),
-                extra_price=extra_price
+        product = PRODUCT_CACHE.get(data.product_code)
+        if not product:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "error": "유효하지 않은 상품입니다. 먼저 검색을 수행해주세요."}
             )
+        
+        print(f"📦 [CHATMALL_SELECT] 상품 선택: {data.product_code}")
+        
+        # 세션에 상품 정보 저장
+        product_name = product.get('제목', '상품')
+        WebOrderManager.update_session_data(
+            session_id,
+            product_code=data.product_code,
+            product_name=product_name,
+            unit_price=int(float(product.get("가격", 0) or 0)),
+            shipping_fee=int(float(product.get("배송비", 0) or 0)),
+            product_info=product
+        )
+        
+        # 옵션 파싱
+        options = []
+        options_raw = product.get("조합형옵션", "")
+        
+        if options_raw and str(options_raw).lower() not in ["nan", "", "none", "null"]:
+            option_lines = str(options_raw).split("\n") if '\n' in str(options_raw) else [str(options_raw)]
             
-            return {
-                "success": True,
-                "session_id": session_id,
-                "step": "option_selected",
-                "selected_option": option_name,
-                "extra_price": extra_price
+            for line in option_lines:
+                line = line.strip()
+                if line:
+                    try:
+                        parts = line.split(",")
+                        if len(parts) >= 2:
+                            name = parts[0].strip()
+                            extra_price = int(float(parts[1].strip())) if parts[1].strip() else 0
+                            options.append({
+                                "name": name,
+                                "extra_price": extra_price,
+                                "display": f"{name}" + (f" (+{extra_price:,}원)" if extra_price > 0 else "")
+                            })
+                    except:
+                        continue
+        
+        return JSONResponse(content={
+            "status": "success",
+            "action": "select_product",
+            "session_id": session_id,
+            "selected_product": {
+                "code": data.product_code,
+                "name": product_name,
+                "price": int(float(product.get("가격", 0) or 0)),
+                "shipping": int(float(product.get("배송비", 0) or 0)),
+                "image": product.get('이미지', ''),
+                "bundle_size": int(float(product.get("최대구매수량", 0) or 0))
+            },
+            "options": options,
+            "has_options": len(options) > 0,
+            "next_action": "select_option" if options else "set_quantity",
+            "navigation": {
+                "can_go_home": True,
+                "can_reset": True,
+                "can_go_back": True,
+                "back_action": "search"
             }
+        })
         
-        # 4. 수량 설정 및 가격 계산
-        elif action == "set_quantity":
-            quantity = data.get("quantity", 1)
-            if quantity <= 0:
-                return {"success": False, "session_id": session_id, "error": "수량은 1개 이상이어야 합니다"}
-            
-            session_data = WebOrderManager.get_session_data(session_id)
-            unit_price = session_data.get("unit_price", 0)
-            extra_price = session_data.get("extra_price", 0)
-            shipping_fee = session_data.get("shipping_fee", 0)
-            
-            # 가격 계산
-            item_price = unit_price + extra_price
-            item_total = item_price * quantity
-            
-            # 묶음배송 계산
-            product_info = session_data.get("product_info", {})
-            bundle_size = int(float(product_info.get("최대구매수량", 0) or 0))
-            
-            if bundle_size > 0:
-                bundles_needed = math.ceil(quantity / bundle_size)
-                total_shipping = shipping_fee * bundles_needed
-            else:
-                bundles_needed = 1
-                total_shipping = shipping_fee
-            
-            total_price = item_total + total_shipping
-            
-            WebOrderManager.update_session_data(
-                session_id,
-                step="quantity_set",
-                quantity=quantity,
-                total_price=total_price,
-                calculated_shipping=total_shipping,
-                bundles_needed=bundles_needed
-            )
-            
-            return {
-                "success": True,
-                "session_id": session_id,
-                "step": "quantity_set",
-                "order_summary": {
-                    "product_name": session_data.get("product_name"),
-                    "selected_option": session_data.get("selected_option"),
-                    "quantity": quantity,
-                    "unit_price": unit_price,
-                    "extra_price": extra_price,
-                    "item_total": item_total,
-                    "shipping_fee": total_shipping,
-                    "bundles_needed": bundles_needed,
-                    "bundle_size": bundle_size,
-                    "total_price": total_price
-                }
-            }
-        
-        # 5. 주문자 정보 제출
-        elif action == "submit_info":
-            required_fields = ["receiver_name", "address", "phone_number", "email"]
-            for field in required_fields:
-                if not data.get(field):
-                    return {"success": False, "session_id": session_id, "error": f"{field}는 필수 입력 항목입니다"}
-            
-            WebOrderManager.update_session_data(
-                session_id,
-                step="info_submitted",
-                receiver_name=data.get("receiver_name"),
-                address=data.get("address"),
-                phone_number=data.get("phone_number"),
-                email=data.get("email")
-            )
-            
-            return {
-                "success": True,
-                "session_id": session_id,
-                "step": "info_submitted",
-                "message": "주문 정보가 저장되었습니다"
-            }
-        
-        # 6. 최종 주문 완료
-        elif action == "complete":
-            session_data = WebOrderManager.get_session_data(session_id)
-            
-            # 데이터 검증
-            if not session_data.get("receiver_name") or not session_data.get("product_name"):
-                return {"success": False, "session_id": session_id, "error": "주문 정보가 완전하지 않습니다"}
-            
-            # 구글 시트 전송
-            try:
-                sheet_success = await send_order_to_sheets_unified(session_id, session_data)
-                
-                if sheet_success:
-                    WebOrderManager.update_session_data(session_id, step="completed")
-                    order_number = f"WEB{int(time.time())}"
-                    
-                    return {
-                        "success": True,
-                        "session_id": session_id,
-                        "step": "completed",
-                        "order_number": order_number,
-                        "message": "주문이 성공적으로 완료되었습니다!",
-                        "order_details": {
-                            "receiver_name": session_data.get("receiver_name"),
-                            "product_name": session_data.get("product_name"),
-                            "quantity": session_data.get("quantity"),
-                            "total_price": session_data.get("total_price"),
-                            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        }
-                    }
-                else:
-                    return {"success": False, "session_id": session_id, "error": "주문 처리 중 오류가 발생했습니다"}
-                    
-            except Exception as e:
-                print(f"❌ [ORDER_COMPLETE] {e}")
-                return {"success": False, "session_id": session_id, "error": "구글 시트 전송에 실패했습니다"}
-        
-        # 7. 세션 상태 조회
-        elif action == "get_status":
-            session_data = WebOrderManager.get_session_data(session_id)
-            return {
-                "success": True,
-                "session_id": session_id,
-                "step": session_data.get("step", "search"),
-                "data": session_data
-            }
-        
-        # 8. 세션 초기화
-        elif action == "reset":
-            try:
-                all_data = load_json_data("web_orders.json")
-                if session_id in all_data:
-                    del all_data[session_id]
-                    save_json_data("web_orders.json", all_data)
-                
-                # Redis 세션 초기화 (세션 ID가 문자열인지 확인)
-                if isinstance(session_id, str):
-                    clear_message_history(session_id)
-                
-                return {
-                    "success": True,
-                    "session_id": session_id,
-                    "step": "search",
-                    "message": "세션이 초기화되었습니다"
-                }
-            except Exception as e:
-                print(f"❌ [RESET_ERROR] {e}")
-                return {"success": False, "session_id": session_id, "error": "초기화 중 오류가 발생했습니다"}
-        
-        else:
-            return {"success": False, "session_id": session_id, "error": "알 수 없는 액션입니다"}
-            
     except Exception as e:
-        print(f"❌ [WEB_ORDER] 통합 주문 처리 오류: {e}")
-        import traceback
-        print(f"❌ [WEB_ORDER] 상세 오류:\n{traceback.format_exc()}")
-        return {"success": False, "error": "서버 오류가 발생했습니다"}
+        print(f"❌ [CHATMALL_SELECT] 오류: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "error": str(e), "action": "select_product"}
+        )
 
-# 구글 시트 전송 함수
-async def send_order_to_sheets_unified(session_id: str, session_data: dict) -> bool:
-    """통합 구글 시트 전송"""
+async def handle_chatmall_select_option(data: ExtendedChatmallRequest, session_id: str):
+    """3단계: 옵션 선택 처리"""
     try:
-        print(f"📊 [SHEETS] 구글 시트 전송 시작 - {session_id}")
+        option_name = data.option_name or "기본옵션"
+        extra_price = data.extra_price or 0
         
-        sheet = init_google_sheets()
-        if not sheet:
-            print("❌ [SHEETS] Google Sheets 연결 실패")
-            return False
+        print(f"⚙️ [CHATMALL_OPTION] 옵션 선택: {option_name}, 추가금액: {extra_price}")
         
-        # 현재 시간
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # 세션에 옵션 정보 저장
+        WebOrderManager.update_session_data(
+            session_id,
+            selected_option=f"{option_name}" + (f" (+{extra_price:,}원)" if extra_price > 0 else ""),
+            extra_price=extra_price
+        )
         
-        # 전송할 데이터 준비
-        order_data = {
-            "Order Date": current_time,
-            "Who ordered?": session_id,
-            "Receiver's Name": session_data.get('receiver_name', ''),
-            "What did they order?": session_data.get('product_name', ''),
-            "Cart Total": f"{session_data.get('total_price', 0):,}원",
-            "Grand Total": f"{session_data.get('total_price', 0):,}원",
-            "Delivery Address": session_data.get('address', ''),
-            "Email": session_data.get('email', ''),
-            "phone_number": session_data.get('phone_number', ''),
-            "option": session_data.get('selected_option', ''),
-            "quantity": session_data.get('quantity', 0),
-            "product_code": session_data.get('product_code', ''),
+        return JSONResponse(content={
+            "status": "success",
+            "action": "select_option",
+            "session_id": session_id,
+            "selected_option": {
+                "name": option_name,
+                "extra_price": extra_price,
+                "display": f"{option_name}" + (f" (+{extra_price:,}원)" if extra_price > 0 else "")
+            },
+            "next_action": "set_quantity",
+            "navigation": {
+                "can_go_home": True,
+                "can_reset": True,
+                "can_go_back": True,
+                "back_action": "select_product"
+            }
+        })
+        
+    except Exception as e:
+        print(f"❌ [CHATMALL_OPTION] 오류: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "error": str(e), "action": "select_option"}
+        )
+
+async def handle_chatmall_set_quantity(data: ExtendedChatmallRequest, session_id: str):
+    """4단계: 수량 설정 처리"""
+    try:
+        quantity = data.quantity or 1
+        if quantity <= 0:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "error": "수량은 1개 이상이어야 합니다"}
+            )
+        
+        print(f"🔢 [CHATMALL_QUANTITY] 수량 설정: {quantity}")
+        
+        # 가격 계산
+        session_data = WebOrderManager.get_session_data(session_id)
+        unit_price = session_data.get("unit_price", 0)
+        extra_price = session_data.get("extra_price", 0)
+        shipping_fee = session_data.get("shipping_fee", 0)
+        
+        item_price = unit_price + extra_price
+        item_total = item_price * quantity
+        
+        # 묶음배송 계산
+        product_info = session_data.get("product_info", {})
+        bundle_size = int(float(product_info.get("최대구매수량", 0) or 0))
+        
+        if bundle_size > 0:
+            bundles_needed = math.ceil(quantity / bundle_size)
+            total_shipping = shipping_fee * bundles_needed
+        else:
+            bundles_needed = 1
+            total_shipping = shipping_fee
+        
+        total_price = item_total + total_shipping
+        
+        # 세션에 수량 및 가격 정보 저장
+        WebOrderManager.update_session_data(
+            session_id,
+            quantity=quantity,
+            total_price=total_price,
+            calculated_shipping=total_shipping,
+            bundles_needed=bundles_needed
+        )
+        
+        return JSONResponse(content={
+            "status": "success",
+            "action": "set_quantity",
+            "session_id": session_id,
+            "quantity": quantity,
+            "price_summary": {
+                "unit_price": unit_price,
+                "extra_price": extra_price,
+                "item_total": item_total,
+                "shipping_fee": total_shipping,
+                "total_price": total_price,
+                "bundle_info": {
+                    "bundle_size": bundle_size,
+                    "bundles_needed": bundles_needed
+                } if bundle_size > 0 else None
+            },
+            "next_action": "submit_info",
+            "navigation": {
+                "can_go_home": True,
+                "can_reset": True,
+                "can_go_back": True,
+                "back_action": "select_option"
+            }
+        })
+        
+    except Exception as e:
+        print(f"❌ [CHATMALL_QUANTITY] 오류: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "error": str(e), "action": "set_quantity"}
+        )
+
+async def handle_chatmall_submit_info(data: ExtendedChatmallRequest, session_id: str):
+    """5단계: 주문자 정보 입력 처리"""
+    try:
+        # 필수 필드 검증
+        required_fields = {
+            "receiver_name": data.receiver_name,
+            "address": data.address,
+            "phone_number": data.phone_number,
+            "email": data.email
         }
         
-        # 헤더 확인 및 데이터 추가
-        headers = sheet.row_values(1)
-        all_values = sheet.get_all_values()
-        next_row = len(all_values) + 1
+        for field_name, field_value in required_fields.items():
+            if not field_value:
+                return JSONResponse(
+                    status_code=400,
+                    content={"status": "error", "error": f"{field_name}는 필수 입력 항목입니다"}
+                )
         
-        # 드롭다운 제외 컬럼만 업데이트
-        dropdown_columns = ["Deposit Confirmed?", "Order Placed on Korean Shopping Mall?", "Order Received by Customer?"]
+        print(f"📝 [CHATMALL_INFO] 주문 정보 입력: {data.receiver_name}")
         
-        for col_index, header in enumerate(headers, start=1):
-            if header not in dropdown_columns:
-                value = order_data.get(header, "")
-                if value:
-                    sheet.update_cell(next_row, col_index, str(value))
+        # 세션에 주문자 정보 저장
+        WebOrderManager.update_session_data(
+            session_id,
+            receiver_name=data.receiver_name,
+            address=data.address,
+            phone_number=data.phone_number,
+            email=data.email
+        )
         
-        print(f"✅ [SHEETS] 구글 시트 전송 완료!")
-        return True
+        # 주문 요약 정보 생성
+        session_data = WebOrderManager.get_session_data(session_id)
+        
+        return JSONResponse(content={
+            "status": "success",
+            "action": "submit_info",
+            "session_id": session_id,
+            "order_summary": {
+                "customer_info": {
+                    "receiver_name": data.receiver_name,
+                    "address": data.address,
+                    "phone_number": data.phone_number,
+                    "email": data.email
+                },
+                "product_info": {
+                    "product_name": session_data.get("product_name"),
+                    "selected_option": session_data.get("selected_option"),
+                    "quantity": session_data.get("quantity"),
+                    "total_price": session_data.get("total_price")
+                }
+            },
+            "next_action": "complete",
+            "navigation": {
+                "can_go_home": True,
+                "can_reset": True,
+                "can_go_back": True,
+                "back_action": "set_quantity"
+            }
+        })
         
     except Exception as e:
-        print(f"❌ [SHEETS] 구글 시트 전송 오류: {e}")
-        return False
+        print(f"❌ [CHATMALL_INFO] 오류: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "error": str(e), "action": "submit_info"}
+        )
+
+async def handle_chatmall_complete(data: ExtendedChatmallRequest, session_id: str):
+    """6단계: 주문 완료 처리"""
+    try:
+        print(f"🎉 [CHATMALL_COMPLETE] 주문 완료 처리")
+        
+        # 세션 데이터 확인
+        session_data = WebOrderManager.get_session_data(session_id)
+        
+        if not session_data.get("receiver_name") or not session_data.get("product_name"):
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "error": "주문 정보가 완전하지 않습니다"}
+            )
+        
+        # 구글 시트 전송
+        try:
+            sheet_success = await send_order_to_sheets_unified(session_id, session_data)
+            
+            if sheet_success:
+                WebOrderManager.update_session_data(session_id, step="completed")
+                order_number = f"CHATMALL{int(time.time())}"
+                
+                total_price = session_data.get("total_price", 0)
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                completion_message = f"""✅ Order Completed Successfully! 🎉
+
+📋 Order Number: {order_number}
+⏰ Order Time: {timestamp}
+💰 Total: {total_price:,}원
+
+🚚 We'll start processing your order right away!
+Thank you for shopping with ChatMall! 😊"""
+                
+                return JSONResponse(content={
+                    "status": "success",
+                    "action": "complete",
+                    "session_id": session_id,
+                    "order_number": order_number,
+                    "message": "주문이 성공적으로 완료되었습니다!",
+                    "order_details": {
+                        "receiver_name": session_data.get("receiver_name"),
+                        "product_name": session_data.get("product_name"),
+                        "quantity": session_data.get("quantity"),
+                        "total_price": session_data.get("total_price"),
+                        "timestamp": timestamp
+                    },
+                    "completion_message": completion_message,
+                    "navigation": {
+                        "can_go_home": True,
+                        "can_start_new_order": True
+                    }
+                })
+            else:
+                return JSONResponse(
+                    status_code=500,
+                    content={"status": "error", "error": "주문 처리 중 오류가 발생했습니다"}
+                )
+                
+        except Exception as e:
+            print(f"❌ [CHATMALL_COMPLETE] 구글 시트 오류: {e}")
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "error": "구글 시트 전송에 실패했습니다"}
+            )
+        
+    except Exception as e:
+        print(f"❌ [CHATMALL_COMPLETE] 오류: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "error": str(e), "action": "complete"}
+        )
+
+async def handle_chatmall_go_home(data: ExtendedChatmallRequest, session_id: str):
+    """홈으로 이동 처리"""
+    try:
+        print(f"🏠 [CHATMALL_HOME] 홈으로 이동: {session_id}")
+        
+        # 세션 데이터 초기화 (주문 진행 중인 데이터 삭제)
+        try:
+            all_data = load_json_data("web_orders.json")
+            if session_id in all_data:
+                del all_data[session_id]
+                save_json_data("web_orders.json", all_data)
+                print(f"🏠 [CHATMALL_HOME] 세션 데이터 초기화 완료: {session_id}")
+        except Exception as e:
+            print(f"🏠 [CHATMALL_HOME] 세션 초기화 오류: {e}")
+        
+        # Redis 세션 초기화
+        try:
+            if isinstance(session_id, str):
+                clear_message_history(session_id)
+                print(f"🏠 [CHATMALL_HOME] Redis 세션 초기화 완료")
+        except Exception as e:
+            print(f"🏠 [CHATMALL_HOME] Redis 초기화 오류: {e}")
+        
+        return JSONResponse(content={
+            "status": "success",
+            "action": "go_home",
+            "session_id": session_id,
+            "message": "🏠 홈으로 돌아갑니다. 새로운 검색을 시작하세요!",
+            "reset_completed": True,
+            "next_action": "search",
+            "navigation": {
+                "can_search": True,
+                "can_reset": True
+            }
+        })
+        
+    except Exception as e:
+        print(f"❌ [CHATMALL_HOME] 오류: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "error": str(e), "action": "go_home"}
+        )
+
+async def handle_chatmall_reset(data: ExtendedChatmallRequest, session_id: str):
+    """대화 초기화 처리"""
+    try:
+        print(f"♻️ [CHATMALL_RESET] 대화 초기화: {session_id}")
+        
+        # 세션 데이터 완전 초기화
+        try:
+            all_data = load_json_data("web_orders.json")
+            if session_id in all_data:
+                del all_data[session_id]
+                save_json_data("web_orders.json", all_data)
+                print(f"♻️ [CHATMALL_RESET] 세션 데이터 완전 삭제: {session_id}")
+        except Exception as e:
+            print(f"♻️ [CHATMALL_RESET] 세션 삭제 오류: {e}")
+        
+        # Redis 대화 기록 초기화
+        try:
+            if isinstance(session_id, str):
+                clear_message_history(session_id)
+                print(f"♻️ [CHATMALL_RESET] Redis 대화 기록 초기화 완료")
+        except Exception as e:
+            print(f"♻️ [CHATMALL_RESET] Redis 초기화 오류: {e}")
+        
+        # 상품 캐시에서 해당 세션 관련 데이터 정리 (선택적)
+        # PRODUCT_CACHE는 전역이므로 건드리지 않음
+        
+        return JSONResponse(content={
+            "status": "success",
+            "action": "reset",
+            "session_id": session_id,
+            "message": "♻️ 대화 기록이 초기화되었습니다. 새로운 대화를 시작하세요!",
+            "reset_completed": True,
+            "conversation_cleared": True,
+            "next_action": "search",
+            "navigation": {
+                "can_search": True,
+                "can_go_home": True
+            }
+        })
+        
+    except Exception as e:
+        print(f"❌ [CHATMALL_RESET] 오류: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "error": str(e), "action": "reset"}
+        )
 
 
 
