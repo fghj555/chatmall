@@ -3363,7 +3363,6 @@ async def handle_chatmall_search_with_triggers(data: ExtendedChatmallRequest, se
             "products": products,
             "next_action": "select_product",
             "navigation": {
-                "can_go_home": True,
                 "can_reset": True
             }
         }
@@ -3473,7 +3472,6 @@ async def handle_chatmall_select_product_with_triggers(data: ExtendedChatmallReq
             "total_cards": math.ceil(len(options) / 3) if options else 0,
             "next_action": "select_option" if options else "set_quantity",
             "navigation": {
-                "can_go_home": True,
                 "can_reset": True,
                 "can_go_back": True,
                 "back_action": "search"
@@ -3546,7 +3544,6 @@ async def handle_chatmall_select_option_with_triggers(data: ExtendedChatmallRequ
             },
             "next_action": "set_quantity",
             "navigation": {
-                "can_go_home": True,
                 "can_reset": True,
                 "can_go_back": True,
                 "back_action": "select_product"
@@ -3680,7 +3677,6 @@ async def handle_chatmall_set_quantity_with_triggers(data: ExtendedChatmallReque
                 }
             ],
             "navigation": {
-                "can_go_home": True,
                 "can_reset": True,
                 "can_go_back": True,
                 "back_action": "select_option"
@@ -3771,7 +3767,6 @@ async def handle_chatmall_submit_info_with_triggers(data: ExtendedChatmallReques
             },
             "next_action": "complete",
             "navigation": {
-                "can_go_home": True,
                 "can_reset": True,
                 "can_go_back": True,
                 "back_action": "set_quantity"
@@ -3849,7 +3844,6 @@ async def handle_chatmall_complete_with_triggers(data: ExtendedChatmallRequest, 
                         "timestamp": timestamp
                     },
                     "navigation": {
-                        "can_go_home": True,
                         "can_start_new_order": True
                     }
                 })
@@ -3925,7 +3919,6 @@ async def handle_chatmall_reset_with_triggers(data: ExtendedChatmallRequest, ses
             "next_action": "search",
             "navigation": {
                 "can_search": True,
-                "can_go_home": True,
                 "show_navigation_buttons": True
             },
             "navigation_buttons": [
