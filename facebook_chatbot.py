@@ -2409,15 +2409,15 @@ async def process_ai_response(sender_id: str, user_message: str, processing_key:
     try:
         print(f"🕒 [AI 처리 시작] 유저 ID: {sender_id}, 메시지: {user_message}")
 
-        # 타임아웃 설정 (30초)
+        # 타임아웃 설정 (50초)
         try:
             loop = asyncio.get_running_loop()
             bot_response = await asyncio.wait_for(
                 loop.run_in_executor(executor, external_search_and_generate_response, user_message, sender_id),
-                timeout=30.0
+                timeout=50.0
             )
         except asyncio.TimeoutError:
-            print(f"⏱️ [AI_TIMEOUT] AI 처리 타임아웃 (30초)")
+            print(f"⏱️ [AI_TIMEOUT] AI 처리 타임아웃 (50초)")
             send_facebook_message(sender_id, "The request timed out. Please try again.")
             return
 
