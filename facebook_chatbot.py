@@ -3287,9 +3287,6 @@ async def extended_chatmall_endpoint(data: ExtendedChatmallRequest):
         elif data.action == "complete":
             return await handle_chatmall_complete_with_triggers(data, session_id)
         
-        elif data.action == "go_home":
-            return await handle_chatmall_go_home_with_triggers(data, session_id)
-        
         elif data.action == "reset":
             return await handle_chatmall_reset_with_triggers(data, session_id)
         
@@ -3884,85 +3881,6 @@ async def handle_chatmall_complete_with_triggers(data: ExtendedChatmallRequest, 
             content={"status": "error", "error": str(e), "action": "complete"}
         )
 
-async def handle_chatmall_go_home_with_triggers(data: ExtendedChatmallRequest, session_id: str):
-    """홈으로 이동 처리 (트리거 메시지 포함)"""
-    try:
-        print(f"🏠 [CHATMALL_HOME] 홈으로 이동: {session_id}")
-        
-        # 세션 데이터 초기화
-        try:
-            WebOrderManager.clear_session_data(session_id)
-            print(f"🏠 [CHATMALL_HOME] 세션 데이터 초기화 완료: {session_id}")
-        except Exception as e:
-            print(f"🏠 [CHATMALL_HOME] 세션 초기화 오류: {e}")
-        
-        # Redis 세션 초기화
-        try:
-            if isinstance(session_id, str):
-                clear_message_history(session_id)
-                print(f"🏠 [CHATMALL_HOME] Redis 세션 초기화 완료")
-        except Exception as e:
-            print(f"🏠 [CHATMALL_HOME] Redis 초기화 오류: {e}")
-        
-        # Facebook 챗봇 스타일 홈 메시지
-        welcome_message = (
-            f"Welcome!\n"
-            f"Thank you for contacting ChatMall.\n"
-            f"Our Chatbot helps foreigners in Korea shop easily.\n"
-            f"Looking for something? Just type it in!"
-        )
-        
-        guidance_message = (
-            "AI Product Search is ON!\n\n"
-            "What are you shopping for today?\n\n"
-            "AI picks, just for you! Enter what you're looking for."
-        )
-        
-        return JSONResponse(content={
-            "status": "success",
-            "action": "go_home",
-            "session_id": session_id,
-            "trigger_message": welcome_message,
-            "guidance_message": guidance_message,
-            "message": "홈으로 돌아갑니다. 새로운 검색을 시작하세요!",
-            "reset_completed": True,
-            "next_action": "search",
-            "navigation": {
-                "can_search": True,
-                "can_reset": True,
-                "show_welcome_buttons": True
-            },
-            "welcome_buttons": [
-                {
-                    "title": "Let's Go ChatMall",
-                    "url": "https://www.chatmall.kr/",
-                    "type": "web_url"
-                },
-                {
-                    "title": "Sign Up Now",
-                    "action": "register",
-                    "type": "postback"
-                },
-                {
-                    "title": "Track Order", 
-                    "action": "track_order",
-                    "type": "postback"
-                },
-                {
-                    "title": "Start My AI Picks",
-                    "action": "ai_search", 
-                    "type": "postback"
-                }
-            ]
-        })
-        
-    except Exception as e:
-        print(f"❌ [CHATMALL_HOME] 오류: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "error": str(e), "action": "go_home"}
-        )
-
 async def handle_chatmall_reset_with_triggers(data: ExtendedChatmallRequest, session_id: str):
     """대화 초기화 처리 (트리거 메시지 포함)"""
     try:
@@ -3993,7 +3911,6 @@ async def handle_chatmall_reset_with_triggers(data: ExtendedChatmallRequest, ses
         
         navigation_guidance = (
             "Click \"Reset\" below to reset the conversation history\n\n"
-            "Click \"Go Home\" to return to main menu"
         )
         
         return JSONResponse(content={
@@ -4015,11 +3932,6 @@ async def handle_chatmall_reset_with_triggers(data: ExtendedChatmallRequest, ses
                 {
                     "title": "Reset Conversation",
                     "action": "reset",
-                    "type": "postback"
-                },
-                {
-                    "title": "Go Home",
-                    "action": "go_home", 
                     "type": "postback"
                 }
             ]
