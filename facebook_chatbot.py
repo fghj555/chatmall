@@ -328,11 +328,11 @@ def init_google_sheets():
         gc = gspread.authorize(credential)
         
         # 스프레드시트 연결
-        spreadsheet_url = "https://docs.google.com/spreadsheets/d/1rFRveVzw4w4abPaJ2hSr0F9CnyKx0-mTPykc852jaU8/edit"
+        spreadsheet_url = "https://docs.google.com/spreadsheets/d/1N-aD64bTw1tKHRKyDksbG2xvvVNsOZPFMcQIxgTUm_4/edit?pli=1&gid=0#gid=0"
         doc = gc.open_by_url(spreadsheet_url)
         
         # 워크시트 선택
-        sheet = doc.worksheet("Orders의 사본")
+        sheet = doc.worksheet("Orders")
         
         print("✅ Google Sheets 연결 성공")
         return sheet
