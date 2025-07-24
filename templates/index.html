@@ -1061,18 +1061,6 @@
             // body에 추가
             document.body.appendChild(alert);
         }
-
-        // 페이지 로드시 서버 상태 확인
-        window.addEventListener('load', async function() {
-            try {
-                const response = await fetch(`${getHost()}/health`);
-                const data = await response.json();
-                console.log('✅ 서버 상태:', data);
-            } catch (error) {
-                console.error('❌ 서버 연결 실패:', error);
-                showAlert('⚠️ 서버 연결 상태를 확인해주세요.', 'error');
-            }
-        });
     </script>
 </body>
 </html>
