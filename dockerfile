@@ -22,8 +22,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # JSON 파일 생성 및 권한 설정
-RUN touch user_data.json order_data.json && \
-    chmod 777 user_data.json order_data.json && \
+RUN touch user_data.json order_data.json web_orders.json && \
+    echo '{}' > user_data.json && \
+    echo '{}' > order_data.json && \
+    echo '{}' > web_orders.json && \
+    echo '{}' > web_sessions.json && \
+    chmod 777 user_data.json order_data.json web_orders.json web_sessions.json && \
     chmod 777 /app
 
 # 환경변수
