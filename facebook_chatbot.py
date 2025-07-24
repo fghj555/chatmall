@@ -3114,10 +3114,153 @@ class ExtendedChatmallRequest(BaseModel):
 
 
 
+# 웹 주문 관리 클래스 추가
+class WebOrderManager:
+    """웹 주문 세션 관리 클래스"""
+    
+    @staticmethod
+    def get_session_data(session_id: str):
+        """웹 세션 데이터 조회"""
+        all_data = load_json_data("web_orders.json")
+        if session_id not in all_data:
+            all_data[session_id] = {
+                "product_code": None,
+                "product_name": None,
+                "selected_option": None,
+                "extra_price": 0,
+                "quantity": 0,
+                "unit_price": 0,
+                "shipping_fee": 0,
+                "total_price": 0,
+                "bundle_size": 0,
+                "bundles_needed": 1,
+                "product_info": {},
+                "receiver_name": None,
+                "address": None,
+                "phone_number": None,
+                "email": None,
+                "step": "none",
+                "last_updated": time.time()
+            }
+            save_json_data("web_orders.json", all_data)
+        return all_data[session_id]
+    
+    @staticmethod
+    def update_session_data(session_id: str, **kwargs):
+        """웹 세션 데이터 업데이트"""
+        all_data = load_json_data("web_orders.json")
+        if session_id not in all_data:
+            all_data[session_id] = {
+                "product_code": None,
+                "product_name": None,
+                "selected_option": None,
+                "extra_price": 0,
+                "quantity": 0,
+                "unit_price": 0,
+                "shipping_fee": 0,
+                "total_price": 0,
+                "bundle_size": 0,
+                "bundles_needed": 1,
+                "product_info": {},
+                "receiver_name": None,
+                "address": None,
+                "phone_number": None,
+                "email": None,
+                "step": "none",
+                "last_updated": time.time()
+            }
+        
+        all_data[session_id].update(kwargs)
+        all_data[session_id]["last_updated"] = time.time()
+        
+        if save_json_data("web_orders.json", all_data):
+            print(f"[WEB_SESSION] 세션 {session_id} 데이터 저장: {kwargs}")
+        else:
+            print(f"[WEB_SESSION] 세션 {session_id} 데이터 저장 실패")
+
+    @staticmethod
+    def clear_session_data(session_id: str):
+        """웹 세션 데이터 삭제"""
+        try:
+            all_data = load_json_data("web_orders.json")
+            if session_id in all_data:
+                del all_data[session_id]
+                save_json_data("web_orders.json", all_data)
+                print(f"[WEB_SESSION] 세션 {session_id} 데이터 삭제 완료")
+                return True
+            return True
+        except Exception as e:
+            print(f"웹 세션 데이터 삭제 오류: {e}")
+            return False
+
+async def send_order_to_sheets_unified(session_id: str, session_data: dict) -> bool:
+    """통합 구글 시트 전송 함수"""
+    try:
+        print(f"[SHEETS_UNIFIED] Google Sheets로 주문 정보 전송 시작 - session_id: {session_id}")
+        
+        # Google Sheets 연결
+        sheet = init_google_sheets()
+        if not sheet:
+            print("[SHEETS_UNIFIED] Google Sheets 연결 실패")
+            return False
+        
+        # 현재 시간
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 헤더 가져오기
+        headers = sheet.row_values(1)
+        print(f"[SHEETS_UNIFIED] 시트 헤더: {headers}")
+        
+        # 드롭다운 컬럼 목록
+        dropdown_columns = [
+            "Deposit Confirmed?",
+            "Order Placed on Korean Shopping Mall?",
+            "Order Received by Customer?"
+        ]
+        
+        # 전송할 데이터 준비
+        data_mapping = {
+            "Order Date": current_time,
+            "Who ordered?": session_data.get('receiver_name', ''),
+            "Receiver's Name": session_data.get('receiver_name', ''),
+            "What did they order?": session_data.get('product_name', ''),
+            "Cart Total": f"{session_data.get('total_price', 0):,}원",
+            "Grand Total": f"{session_data.get('total_price', 0):,}원",
+            "Delivery Address": session_data.get('address', ''),
+            "Email": session_data.get('email', ''),
+            "phone_number": session_data.get('phone_number', ''),
+            "option": session_data.get('selected_option', ''),
+            "quantity": session_data.get('quantity', 0),
+            "product_code": session_data.get('product_code', ''),
+        }
+        
+        # 새 행 번호 찾기
+        all_values = sheet.get_all_values()
+        next_row = len(all_values) + 1
+        
+        print(f"[SHEETS_UNIFIED] 새 행 번호: {next_row}")
+        
+        # 드롭다운이 아닌 컬럼들만 개별 업데이트
+        for col_index, header in enumerate(headers, start=1):
+            if header not in dropdown_columns:
+                value = data_mapping.get(header, "")
+                if value:
+                    sheet.update_cell(next_row, col_index, str(value))
+                    print(f"[SHEETS_UNIFIED] 셀 업데이트: 행{next_row}, 열{col_index} ({header}) = {value}")
+        
+        print(f"[SHEETS_UNIFIED] 주문 정보 전송 완료!")
+        return True
+            
+    except Exception as e:
+        print(f"[SHEETS_UNIFIED] 주문 정보 전송 오류: {e}")
+        import traceback
+        print(f"[SHEETS_UNIFIED] 상세 오류:\n{traceback.format_exc()}")
+        return False
+
 @app.post("/chatmall")
 async def extended_chatmall_endpoint(data: ExtendedChatmallRequest):
     """
-    챗몰 통합 엔드포인트
+    Facebook 챗봇과 동일한 트리거 메시지를 포함한 챗몰 통합 엔드포인트
     """
     try:
         print(f"🔍 [EXTENDED_CHATMALL] 요청: action={data.action}")
@@ -3127,33 +3270,33 @@ async def extended_chatmall_endpoint(data: ExtendedChatmallRequest):
         
         # 액션별 처리
         if data.action == "search":
-            return await handle_chatmall_search(data, session_id)
+            return await handle_chatmall_search_with_triggers(data, session_id)
         
         elif data.action == "select_product":
-            return await handle_chatmall_select_product(data, session_id)
+            return await handle_chatmall_select_product_with_triggers(data, session_id)
         
         elif data.action == "select_option":
-            return await handle_chatmall_select_option(data, session_id)
+            return await handle_chatmall_select_option_with_triggers(data, session_id)
         
         elif data.action == "set_quantity":
-            return await handle_chatmall_set_quantity(data, session_id)
+            return await handle_chatmall_set_quantity_with_triggers(data, session_id)
         
         elif data.action == "submit_info":
-            return await handle_chatmall_submit_info(data, session_id)
+            return await handle_chatmall_submit_info_with_triggers(data, session_id)
         
         elif data.action == "complete":
-            return await handle_chatmall_complete(data, session_id)
+            return await handle_chatmall_complete_with_triggers(data, session_id)
         
         elif data.action == "go_home":
-            return await handle_chatmall_go_home(data, session_id)
+            return await handle_chatmall_go_home_with_triggers(data, session_id)
         
         elif data.action == "reset":
-            return await handle_chatmall_reset(data, session_id)
+            return await handle_chatmall_reset_with_triggers(data, session_id)
         
         # 기본값: 검색 (기존 호환성 유지)
         else:
             if data.query:
-                return await handle_chatmall_search(data, session_id)
+                return await handle_chatmall_search_with_triggers(data, session_id)
             else:
                 return JSONResponse(
                     status_code=400,
@@ -3180,11 +3323,11 @@ async def extended_chatmall_endpoint(data: ExtendedChatmallRequest):
         )
 
 # ============================================================================
-# 각 단계별 처리 함수들
+# 각 단계별 처리 함수들 (트리거 메시지 포함)
 # ============================================================================
 
-async def handle_chatmall_search(data: ExtendedChatmallRequest, session_id: str):
-    """1단계: 검색 처리"""
+async def handle_chatmall_search_with_triggers(data: ExtendedChatmallRequest, session_id: str):
+    """1단계: 검색 처리 (트리거 메시지 포함)"""
     try:
         if not data.query:
             return JSONResponse(
@@ -3193,12 +3336,9 @@ async def handle_chatmall_search(data: ExtendedChatmallRequest, session_id: str)
             )
         
         print(f"🔍 [CHATMALL_SEARCH] 검색 요청: {data.query}")
-        print(f"🔍 [CHATMALL_SEARCH] 세션 ID: {session_id}")
         
         # AI 검색 실행
         result = external_search_and_generate_response(data.query, session_id)
-        
-        print(f"✅ [CHATMALL_SEARCH] 검색 완료 - 결과 개수: {len(result.get('results', []))}")
         
         # 상품 캐시에 저장
         products = result.get("results", [])
@@ -3207,24 +3347,27 @@ async def handle_chatmall_search(data: ExtendedChatmallRequest, session_id: str)
             if product_code:
                 PRODUCT_CACHE[product_code] = product
         
+        # Facebook 챗봇 스타일 트리거 메시지
+        trigger_message = (
+            f"AI Product Search is ON!\n\n"
+            f"What are you shopping for today?\n\n"
+            f"AI picks, just for you! Enter what you're looking for."
+        )
+        
         # 응답 구조
         response = {
             "status": "success",
             "action": "search",
             "session_id": session_id,
+            "trigger_message": trigger_message,
+            "ai_message": result.get("combined_message_text", ""),
             "query": data.query,
             "total_results": len(products),
-            "ai_message": result.get("combined_message_text", ""),
             "products": products,
             "next_action": "select_product",
             "navigation": {
                 "can_go_home": True,
                 "can_reset": True
-            },
-            "debug_info": {
-                "preprocessed_query": result.get("UserMessage", ""),
-                "context": result.get("RawContext", []),
-                "message_history_count": len(result.get("message_history", []))
             }
         }
         
@@ -3237,8 +3380,8 @@ async def handle_chatmall_search(data: ExtendedChatmallRequest, session_id: str)
             content={"status": "error", "error": str(e), "action": "search"}
         )
 
-async def handle_chatmall_select_product(data: ExtendedChatmallRequest, session_id: str):
-    """2단계: 상품 선택 처리"""
+async def handle_chatmall_select_product_with_triggers(data: ExtendedChatmallRequest, session_id: str):
+    """2단계: 상품 선택 처리 (트리거 메시지 포함)"""
     try:
         if not data.product_code:
             return JSONResponse(
@@ -3255,15 +3398,31 @@ async def handle_chatmall_select_product(data: ExtendedChatmallRequest, session_
         
         print(f"📦 [CHATMALL_SELECT] 상품 선택: {data.product_code}")
         
-        # 세션에 상품 정보 저장
+        # 상품 정보 추출
         product_name = product.get('제목', '상품')
+        unit_price = int(float(product.get("가격", 0) or 0))
+        shipping_fee = int(float(product.get("배송비", 0) or 0))
+        bundle_size = int(float(product.get("최대구매수량", 0) or 0))
+        
+        # 세션에 상품 정보 저장
         WebOrderManager.update_session_data(
             session_id,
             product_code=data.product_code,
             product_name=product_name,
-            unit_price=int(float(product.get("가격", 0) or 0)),
-            shipping_fee=int(float(product.get("배송비", 0) or 0)),
-            product_info=product
+            unit_price=unit_price,
+            shipping_fee=shipping_fee,
+            bundle_size=bundle_size,
+            product_info=product,
+            step="product_selected"
+        )
+        
+        # Facebook 챗봇 스타일 트리거 메시지
+        trigger_message = (
+            f"You selected:\n\n"
+            f"Product: {product_name}\n"
+            f"Price: {unit_price:,}원\n"
+            f"Shipping: {shipping_fee:,}원\n\n"
+            f"Let's proceed with your order!"
         )
         
         # 옵션 파싱
@@ -3289,20 +3448,32 @@ async def handle_chatmall_select_product(data: ExtendedChatmallRequest, session_
                     except:
                         continue
         
+        # 옵션 선택 안내 메시지 (항상 카루셀 카드 방식)
+        if options:
+            guidance_message = "Please select an option:"
+        else:
+            guidance_message = "This item has a single option — please enter the quantity."
+        
         return JSONResponse(content={
             "status": "success",
             "action": "select_product",
             "session_id": session_id,
+            "trigger_message": trigger_message,
+            "guidance_message": guidance_message,
             "selected_product": {
                 "code": data.product_code,
                 "name": product_name,
-                "price": int(float(product.get("가격", 0) or 0)),
-                "shipping": int(float(product.get("배송비", 0) or 0)),
+                "price": unit_price,
+                "shipping": shipping_fee,
                 "image": product.get('이미지', ''),
-                "bundle_size": int(float(product.get("최대구매수량", 0) or 0))
+                "bundle_size": bundle_size
             },
             "options": options,
             "has_options": len(options) > 0,
+            "option_count": len(options),
+            "option_display_method": "carousel_cards",  # 항상 카루셀 카드 방식
+            "options_per_card": 3,  # 카드당 최대 3개 옵션
+            "total_cards": math.ceil(len(options) / 3) if options else 0,
             "next_action": "select_option" if options else "set_quantity",
             "navigation": {
                 "can_go_home": True,
@@ -3319,8 +3490,8 @@ async def handle_chatmall_select_product(data: ExtendedChatmallRequest, session_
             content={"status": "error", "error": str(e), "action": "select_product"}
         )
 
-async def handle_chatmall_select_option(data: ExtendedChatmallRequest, session_id: str):
-    """3단계: 옵션 선택 처리"""
+async def handle_chatmall_select_option_with_triggers(data: ExtendedChatmallRequest, session_id: str):
+    """3단계: 옵션 선택 처리 (트리거 메시지 포함)"""
     try:
         option_name = data.option_name or "기본옵션"
         extra_price = data.extra_price or 0
@@ -3328,20 +3499,53 @@ async def handle_chatmall_select_option(data: ExtendedChatmallRequest, session_i
         print(f"⚙️ [CHATMALL_OPTION] 옵션 선택: {option_name}, 추가금액: {extra_price}")
         
         # 세션에 옵션 정보 저장
+        selected_option_display = f"{option_name}" + (f" (+{extra_price:,}원)" if extra_price > 0 else "")
+        
         WebOrderManager.update_session_data(
             session_id,
-            selected_option=f"{option_name}" + (f" (+{extra_price:,}원)" if extra_price > 0 else ""),
-            extra_price=extra_price
+            selected_option=selected_option_display,
+            extra_price=extra_price,
+            step="option_selected"
         )
+        
+        # Facebook 챗봇 스타일 트리거 메시지
+        trigger_message = f"Selected Options: {selected_option_display}"
+        
+        # 수량 입력 안내 메시지 생성
+        session_data = WebOrderManager.get_session_data(session_id)
+        product_name = session_data.get("product_name", "상품")
+        bundle_size = session_data.get("bundle_size", 0)
+        
+        if bundle_size > 0:
+            guidance_message = (
+                f"How many do you want?\n\n"
+                f"Product: {product_name}\n"
+                f"Combined Shipping: packaged in sets of {bundle_size}\n"
+                f"ex: Our bundled shipping rate applies to every {bundle_size} items. "
+                f"If you order {bundle_size * 2} items, they will be sent in 2 separate packages "
+                f"({bundle_size} items each), and the shipping fee will be applied twice.\n\n"
+                f"Please enter the quantity.\n"
+                f"(예: 1, 25, 50, 100, 150)"
+            )
+        else:
+            guidance_message = (
+                f"How many do you want?\n\n"
+                f"Product: {product_name}\n"
+                f"Single Shipment (No Quantity Limit)\n\n"
+                f"Please enter the quantity.\n"
+                f"(예: 1, 10, 50, 100)"
+            )
         
         return JSONResponse(content={
             "status": "success",
             "action": "select_option",
             "session_id": session_id,
+            "trigger_message": trigger_message,
+            "guidance_message": guidance_message,
             "selected_option": {
                 "name": option_name,
                 "extra_price": extra_price,
-                "display": f"{option_name}" + (f" (+{extra_price:,}원)" if extra_price > 0 else "")
+                "display": selected_option_display
             },
             "next_action": "set_quantity",
             "navigation": {
@@ -3359,8 +3563,8 @@ async def handle_chatmall_select_option(data: ExtendedChatmallRequest, session_i
             content={"status": "error", "error": str(e), "action": "select_option"}
         )
 
-async def handle_chatmall_set_quantity(data: ExtendedChatmallRequest, session_id: str):
-    """4단계: 수량 설정 처리"""
+async def handle_chatmall_set_quantity_with_triggers(data: ExtendedChatmallRequest, session_id: str):
+    """4단계: 수량 설정 처리 (트리거 메시지 포함)"""
     try:
         quantity = data.quantity or 1
         if quantity <= 0:
@@ -3376,14 +3580,14 @@ async def handle_chatmall_set_quantity(data: ExtendedChatmallRequest, session_id
         unit_price = session_data.get("unit_price", 0)
         extra_price = session_data.get("extra_price", 0)
         shipping_fee = session_data.get("shipping_fee", 0)
+        bundle_size = session_data.get("bundle_size", 0)
+        product_name = session_data.get("product_name", "상품")
+        selected_option = session_data.get("selected_option", "기본옵션")
         
         item_price = unit_price + extra_price
         item_total = item_price * quantity
         
         # 묶음배송 계산
-        product_info = session_data.get("product_info", {})
-        bundle_size = int(float(product_info.get("최대구매수량", 0) or 0))
-        
         if bundle_size > 0:
             bundles_needed = math.ceil(quantity / bundle_size)
             total_shipping = shipping_fee * bundles_needed
@@ -3399,13 +3603,50 @@ async def handle_chatmall_set_quantity(data: ExtendedChatmallRequest, session_id
             quantity=quantity,
             total_price=total_price,
             calculated_shipping=total_shipping,
-            bundles_needed=bundles_needed
+            bundles_needed=bundles_needed,
+            step="quantity_set"
+        )
+        
+        # 묶음배송 안내 메시지 (Facebook 챗봇 스타일)
+        bundle_message = None
+        if bundle_size > 0 and bundles_needed > 1:
+            bundle_message = (
+                f"Bundled Shipping Details:\n"
+                f"   Quantity: {quantity} items\n"
+                f"   Bundles: {bundle_size} items/bundle × {bundles_needed} bundles\n"
+                f"   Shipping Fee: KRW {shipping_fee:,} × {bundles_needed} = KRW {total_shipping:,}"
+            )
+        
+        # 주문 확인 메시지 (Facebook 챗봇 스타일)
+        trigger_message = (
+            f"Would you like to continue with your order?\n\n"
+            f"Product: {product_name}\n"
+            f"Quantity: {quantity} items\n"
+            f"Unit Price: KRW {unit_price:,}"
+        )
+        
+        if extra_price > 0:
+            trigger_message += f"\nAdd-on: KRW {extra_price:,}"
+        
+        if bundle_size > 0 and bundles_needed > 1:
+            trigger_message += f"\n\nBundled Shipping: {bundle_size} items/bundle × {bundles_needed} bundles"
+        
+        trigger_message += f"\nShipping Fee: KRW {total_shipping:,}"
+        trigger_message += f"\nTotal: KRW {total_price:,}"
+        
+        # 배송 정보 수집 안내
+        guidance_message = (
+            "Order confirmed! Let's collect your delivery information.\n\n"
+            "To deliver your items safely and quickly, please provide the required information."
         )
         
         return JSONResponse(content={
             "status": "success",
             "action": "set_quantity",
             "session_id": session_id,
+            "trigger_message": trigger_message,
+            "bundle_message": bundle_message,
+            "guidance_message": guidance_message,
             "quantity": quantity,
             "price_summary": {
                 "unit_price": unit_price,
@@ -3419,6 +3660,28 @@ async def handle_chatmall_set_quantity(data: ExtendedChatmallRequest, session_id
                 } if bundle_size > 0 else None
             },
             "next_action": "submit_info",
+            "input_steps": [
+                {
+                    "field": "receiver_name",
+                    "question": "What is your name or the recipient's full name?",
+                    "type": "text"
+                },
+                {
+                    "field": "address", 
+                    "question": "Thank you! What is the shipping address?",
+                    "type": "textarea"
+                },
+                {
+                    "field": "phone_number",
+                    "question": "Almost done! May I have your phone number?", 
+                    "type": "tel"
+                },
+                {
+                    "field": "email",
+                    "question": "Last step! What is your email address?",
+                    "type": "email"
+                }
+            ],
             "navigation": {
                 "can_go_home": True,
                 "can_reset": True,
@@ -3434,8 +3697,8 @@ async def handle_chatmall_set_quantity(data: ExtendedChatmallRequest, session_id
             content={"status": "error", "error": str(e), "action": "set_quantity"}
         )
 
-async def handle_chatmall_submit_info(data: ExtendedChatmallRequest, session_id: str):
-    """5단계: 주문자 정보 입력 처리"""
+async def handle_chatmall_submit_info_with_triggers(data: ExtendedChatmallRequest, session_id: str):
+    """5단계: 주문자 정보 입력 처리 (트리거 메시지 포함)"""
     try:
         # 필수 필드 검증
         required_fields = {
@@ -3460,16 +3723,41 @@ async def handle_chatmall_submit_info(data: ExtendedChatmallRequest, session_id:
             receiver_name=data.receiver_name,
             address=data.address,
             phone_number=data.phone_number,
-            email=data.email
+            email=data.email,
+            step="info_submitted"
         )
         
         # 주문 요약 정보 생성
         session_data = WebOrderManager.get_session_data(session_id)
         
+        # Facebook 챗봇 스타일 주문 확인 메시지
+        trigger_message = (
+            f"Kindly review and confirm the info below is correct:\n\n"
+            f"Name: {data.receiver_name}\n"
+            f"Address: {data.address}\n"
+            f"Contact #: {data.phone_number}\n"
+            f"Email: {data.email}\n\n"
+            f"Product: {session_data.get('product_name', '')}\n"
+            f"Option: {session_data.get('selected_option', '')}\n"
+            f"Quantity: {session_data.get('quantity', '')}\n"
+            f"Total_money: {session_data.get('total_price', 0):,}원"
+        )
+        
+        # 결제 안내 메시지
+        payment_guidance = (
+            "For secure payment processing, please make a deposit to the account below.\n\n"
+            "Bank Name: 하나은행 / Hana Bank\n"
+            "Account Number: 841-910015-85404\n"
+            "Account Name: (주)나로수\n\n"
+            "After sending the payment, please click the \"COMPLETE ORDER\" button so we can process your order faster!"
+        )
+        
         return JSONResponse(content={
             "status": "success",
             "action": "submit_info",
             "session_id": session_id,
+            "trigger_message": trigger_message,
+            "payment_guidance": payment_guidance,
             "order_summary": {
                 "customer_info": {
                     "receiver_name": data.receiver_name,
@@ -3500,8 +3788,8 @@ async def handle_chatmall_submit_info(data: ExtendedChatmallRequest, session_id:
             content={"status": "error", "error": str(e), "action": "submit_info"}
         )
 
-async def handle_chatmall_complete(data: ExtendedChatmallRequest, session_id: str):
-    """6단계: 주문 완료 처리"""
+async def handle_chatmall_complete_with_triggers(data: ExtendedChatmallRequest, session_id: str):
+    """6단계: 주문 완료 처리 (트리거 메시지 포함)"""
     try:
         print(f"🎉 [CHATMALL_COMPLETE] 주문 완료 처리")
         
@@ -3514,6 +3802,13 @@ async def handle_chatmall_complete(data: ExtendedChatmallRequest, session_id: st
                 content={"status": "error", "error": "주문 정보가 완전하지 않습니다"}
             )
         
+        # 결제 확인 메시지 (Facebook 챗봇 스타일)
+        payment_confirmation_message = (
+            "Payment Confirmation\n\n"
+            "Once we confirm your payment, we'll process your order right away!\n\n"
+            "Please give us a moment while our ChatMall team confirms your payment."
+        )
+        
         # 구글 시트 전송
         try:
             sheet_success = await send_order_to_sheets_unified(session_id, session_data)
@@ -3521,23 +3816,32 @@ async def handle_chatmall_complete(data: ExtendedChatmallRequest, session_id: st
             if sheet_success:
                 WebOrderManager.update_session_data(session_id, step="completed")
                 order_number = f"CHATMALL{int(time.time())}"
-                
-                total_price = session_data.get("total_price", 0)
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 
-                completion_message = f"""✅ Order Completed Successfully! 🎉
-
-📋 Order Number: {order_number}
-⏰ Order Time: {timestamp}
-💰 Total: {total_price:,}원
-
-🚚 We'll start processing your order right away!
-Thank you for shopping with ChatMall! 😊"""
+                # Facebook 챗봇 스타일 주문 완료 메시지
+                completion_message = (
+                    f"Order Completed Successfully!\n\n"
+                    f"Order Time: {timestamp}\n"
+                    f"Customer: {session_data.get('receiver_name', '')}\n"
+                    f"Receiver: {session_data.get('receiver_name', '')}\n"
+                    f"Address: {session_data.get('address', '')}\n"
+                    f"Contact: {session_data.get('phone_number', '')}\n"
+                    f"Email: {session_data.get('email', '')}\n\n"
+                    f"Order Details:\n"
+                    f"Product: {session_data.get('product_name', '')}\n"
+                    f"Option: {session_data.get('selected_option', '')}\n"
+                    f"Quantity: {session_data.get('quantity', 0)}\n"
+                    f"Total: {session_data.get('total_price', 0):,}원\n\n"
+                    f"We'll start processing your order right away!\n"
+                    f"Thank you for shopping with ChatMall!"
+                )
                 
                 return JSONResponse(content={
                     "status": "success",
                     "action": "complete",
                     "session_id": session_id,
+                    "trigger_message": payment_confirmation_message,
+                    "completion_message": completion_message,
                     "order_number": order_number,
                     "message": "주문이 성공적으로 완료되었습니다!",
                     "order_details": {
@@ -3547,7 +3851,6 @@ Thank you for shopping with ChatMall! 😊"""
                         "total_price": session_data.get("total_price"),
                         "timestamp": timestamp
                     },
-                    "completion_message": completion_message,
                     "navigation": {
                         "can_go_home": True,
                         "can_start_new_order": True
@@ -3556,14 +3859,22 @@ Thank you for shopping with ChatMall! 😊"""
             else:
                 return JSONResponse(
                     status_code=500,
-                    content={"status": "error", "error": "주문 처리 중 오류가 발생했습니다"}
+                    content={
+                        "status": "error", 
+                        "error": "주문 처리 중 오류가 발생했습니다",
+                        "trigger_message": "There was a temporary issue with our order processing system."
+                    }
                 )
                 
         except Exception as e:
             print(f"❌ [CHATMALL_COMPLETE] 구글 시트 오류: {e}")
             return JSONResponse(
                 status_code=500,
-                content={"status": "error", "error": "구글 시트 전송에 실패했습니다"}
+                content={
+                    "status": "error", 
+                    "error": "구글 시트 전송에 실패했습니다",
+                    "trigger_message": "There was a temporary issue with our order processing system."
+                }
             )
         
     except Exception as e:
@@ -3573,18 +3884,15 @@ Thank you for shopping with ChatMall! 😊"""
             content={"status": "error", "error": str(e), "action": "complete"}
         )
 
-async def handle_chatmall_go_home(data: ExtendedChatmallRequest, session_id: str):
-    """홈으로 이동 처리"""
+async def handle_chatmall_go_home_with_triggers(data: ExtendedChatmallRequest, session_id: str):
+    """홈으로 이동 처리 (트리거 메시지 포함)"""
     try:
         print(f"🏠 [CHATMALL_HOME] 홈으로 이동: {session_id}")
         
-        # 세션 데이터 초기화 (주문 진행 중인 데이터 삭제)
+        # 세션 데이터 초기화
         try:
-            all_data = load_json_data("web_orders.json")
-            if session_id in all_data:
-                del all_data[session_id]
-                save_json_data("web_orders.json", all_data)
-                print(f"🏠 [CHATMALL_HOME] 세션 데이터 초기화 완료: {session_id}")
+            WebOrderManager.clear_session_data(session_id)
+            print(f"🏠 [CHATMALL_HOME] 세션 데이터 초기화 완료: {session_id}")
         except Exception as e:
             print(f"🏠 [CHATMALL_HOME] 세션 초기화 오류: {e}")
         
@@ -3596,17 +3904,56 @@ async def handle_chatmall_go_home(data: ExtendedChatmallRequest, session_id: str
         except Exception as e:
             print(f"🏠 [CHATMALL_HOME] Redis 초기화 오류: {e}")
         
+        # Facebook 챗봇 스타일 홈 메시지
+        welcome_message = (
+            f"Welcome!\n"
+            f"Thank you for contacting ChatMall.\n"
+            f"Our Chatbot helps foreigners in Korea shop easily.\n"
+            f"Looking for something? Just type it in!"
+        )
+        
+        guidance_message = (
+            "AI Product Search is ON!\n\n"
+            "What are you shopping for today?\n\n"
+            "AI picks, just for you! Enter what you're looking for."
+        )
+        
         return JSONResponse(content={
             "status": "success",
             "action": "go_home",
             "session_id": session_id,
-            "message": "🏠 홈으로 돌아갑니다. 새로운 검색을 시작하세요!",
+            "trigger_message": welcome_message,
+            "guidance_message": guidance_message,
+            "message": "홈으로 돌아갑니다. 새로운 검색을 시작하세요!",
             "reset_completed": True,
             "next_action": "search",
             "navigation": {
                 "can_search": True,
-                "can_reset": True
-            }
+                "can_reset": True,
+                "show_welcome_buttons": True
+            },
+            "welcome_buttons": [
+                {
+                    "title": "Let's Go ChatMall",
+                    "url": "https://www.chatmall.kr/",
+                    "type": "web_url"
+                },
+                {
+                    "title": "Sign Up Now",
+                    "action": "register",
+                    "type": "postback"
+                },
+                {
+                    "title": "Track Order", 
+                    "action": "track_order",
+                    "type": "postback"
+                },
+                {
+                    "title": "Start My AI Picks",
+                    "action": "ai_search", 
+                    "type": "postback"
+                }
+            ]
         })
         
     except Exception as e:
@@ -3616,18 +3963,15 @@ async def handle_chatmall_go_home(data: ExtendedChatmallRequest, session_id: str
             content={"status": "error", "error": str(e), "action": "go_home"}
         )
 
-async def handle_chatmall_reset(data: ExtendedChatmallRequest, session_id: str):
-    """대화 초기화 처리"""
+async def handle_chatmall_reset_with_triggers(data: ExtendedChatmallRequest, session_id: str):
+    """대화 초기화 처리 (트리거 메시지 포함)"""
     try:
         print(f"♻️ [CHATMALL_RESET] 대화 초기화: {session_id}")
         
         # 세션 데이터 완전 초기화
         try:
-            all_data = load_json_data("web_orders.json")
-            if session_id in all_data:
-                del all_data[session_id]
-                save_json_data("web_orders.json", all_data)
-                print(f"♻️ [CHATMALL_RESET] 세션 데이터 완전 삭제: {session_id}")
+            WebOrderManager.clear_session_data(session_id)
+            print(f"♻️ [CHATMALL_RESET] 세션 데이터 완전 삭제: {session_id}")
         except Exception as e:
             print(f"♻️ [CHATMALL_RESET] 세션 삭제 오류: {e}")
         
@@ -3639,21 +3983,46 @@ async def handle_chatmall_reset(data: ExtendedChatmallRequest, session_id: str):
         except Exception as e:
             print(f"♻️ [CHATMALL_RESET] Redis 초기화 오류: {e}")
         
-        # 상품 캐시에서 해당 세션 관련 데이터 정리 (선택적)
-        # PRODUCT_CACHE는 전역이므로 건드리지 않음
+        # Facebook 챗봇 스타일 리셋 메시지
+        reset_message = (
+            "Chat history cleared!\n\n"
+            "Now enter what you're looking for:\n\n"
+            "For example: portable fan, striped tee, women's light shoes, 100 paper cups\n\n"
+            "What are you shopping for today?"
+        )
+        
+        navigation_guidance = (
+            "Click \"Reset\" below to reset the conversation history\n\n"
+            "Click \"Go Home\" to return to main menu"
+        )
         
         return JSONResponse(content={
             "status": "success",
             "action": "reset",
             "session_id": session_id,
-            "message": "♻️ 대화 기록이 초기화되었습니다. 새로운 대화를 시작하세요!",
+            "trigger_message": reset_message,
+            "navigation_guidance": navigation_guidance,
+            "message": "대화 기록이 초기화되었습니다. 새로운 대화를 시작하세요!",
             "reset_completed": True,
             "conversation_cleared": True,
             "next_action": "search",
             "navigation": {
                 "can_search": True,
-                "can_go_home": True
-            }
+                "can_go_home": True,
+                "show_navigation_buttons": True
+            },
+            "navigation_buttons": [
+                {
+                    "title": "Reset Conversation",
+                    "action": "reset",
+                    "type": "postback"
+                },
+                {
+                    "title": "Go Home",
+                    "action": "go_home", 
+                    "type": "postback"
+                }
+            ]
         })
         
     except Exception as e:
