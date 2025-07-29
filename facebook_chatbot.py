@@ -683,7 +683,7 @@ def send_facebook_carousel(sender_id: str, products: list):
 
 def get_user_name(sender_id: str) -> str:
     """
-    Facebook에서 사용자의 full_name만 가져오기
+    Facebook에서 사용자의 full_name 가져오기 (이메일 디버깅 포함)
     
     Args:
         sender_id: Facebook 사용자 ID (예: "8127128490722875")
@@ -693,7 +693,7 @@ def get_user_name(sender_id: str) -> str:
     """
     try:
         # Graph API URL 구성
-        url = f"https://graph.facebook.com/v23.0/{sender_id}"
+        url = f"https://graph.facebook.com/v18.0/{sender_id}"
         
         # name과 email 가져오기
         params = {
@@ -701,29 +701,84 @@ def get_user_name(sender_id: str) -> str:
             'access_token': PAGE_ACCESS_TOKEN
         }
         
-        print(f"[GET_NAME] 사용자 이름 요청: {sender_id}")
+        print(f"[GET_NAME] 사용자 정보 요청: {sender_id}")
+        print(f"[GET_NAME] 요청 URL: {url}")
+        print(f"[GET_NAME] 요청 파라미터: fields={params['fields']}")
+        print(f"[GET_NAME] 액세스 토큰 앞 10자리: {PAGE_ACCESS_TOKEN[:10]}...")
         
         # API 호출
         response = requests.get(url, params=params, timeout=10)
         
+        print(f"[GET_NAME] 응답 상태 코드: {response.status_code}")
+        
         if response.status_code == 200:
             user_info = response.json()
+            print(f"[GET_NAME] 전체 응답 데이터: {user_info}")
+            
             user_name = user_info.get('name', '')
             user_email = user_info.get('email', '')
             
-            print(f"[GET_NAME] 이름 가져오기 성공: {user_name}")
-            if user_email:
-                print(f"[GET_NAME] 이메일 가져오기 성공: {user_email}")
+            print(f"[GET_NAME] 파싱된 이름: '{user_name}'")
+            print(f"[GET_NAME] 파싱된 이메일: '{user_email}'")
+            
+            # 이메일이 없는 경우 상세 분석
+            if not user_email:
+                print("=" * 50)
+                print("[EMAIL_DEBUG] 이메일을 가져올 수 없는 이유 분석:")
+                
+                # 1. 응답에 이메일 필드가 아예 없는 경우
+                if 'email' not in user_info:
+                    print("  ❌ 1. 응답에 'email' 필드가 없음")
+                    print("     - 앱에 email 권한이 승인되지 않았을 가능성")
+                    print("     - 사용자가 이메일 공유를 거부했을 가능성")
+                else:
+                    print("  ✅ 1. 응답에 'email' 필드는 존재함")
+                    print(f"     - 값: '{user_info['email']}'")
+                
+                # 2. 앱 권한 확인 방법 안내
+                print("  📋 2. 확인해야 할 사항들:")
+                print("     - Facebook 개발자 콘솔에서 'email' 권한이 승인되었는지 확인")
+                print("     - 앱이 라이브 모드인지 개발 모드인지 확인")
+                print("     - 사용자가 앱에 이메일 권한을 부여했는지 확인")
+                print("     - 사용자의 Facebook 개인정보 설정 확인")
+                print("=" * 50)
             else:
-                print(f"[GET_NAME] 이메일 권한 없음 또는 제공되지 않음")
+                print(f"[GET_NAME] ✅ 이메일 가져오기 성공: {user_email}")
             
             return user_name
         else:
-            print(f"[GET_NAME] API 호출 실패: {response.status_code}")
+            error_response = response.text
+            try:
+                error_json = response.json()
+                print(f"[GET_NAME] ❌ API 오류 응답: {error_json}")
+                
+                # Facebook Graph API 오류 코드 분석
+                if 'error' in error_json:
+                    error_code = error_json['error'].get('code')
+                    error_message = error_json['error'].get('message', '')
+                    error_type = error_json['error'].get('type', '')
+                    
+                    print(f"[GET_NAME] 오류 코드: {error_code}")
+                    print(f"[GET_NAME] 오류 메시지: {error_message}")
+                    print(f"[GET_NAME] 오류 타입: {error_type}")
+                    
+                    # 권한 관련 오류 코드들
+                    if error_code == 10:
+                        print("  ⚠️  권한 부족 오류 - 앱에 필요한 권한이 없습니다")
+                    elif error_code == 200:
+                        print("  ⚠️  권한 부족 오류 - 사용자가 권한을 거부했습니다")
+                    elif error_code == 190:
+                        print("  ⚠️  액세스 토큰 오류 - 토큰이 만료되었거나 유효하지 않습니다")
+                        
+            except:
+                print(f"[GET_NAME] ❌ API 호출 실패 (응답 파싱 불가): {error_response}")
+            
             return ""
             
     except Exception as e:
-        print(f"[GET_NAME] 사용자 이름 가져오기 오류: {e}")
+        print(f"[GET_NAME] ❌ 전체 처리 오류: {e}")
+        import traceback
+        print(f"[GET_NAME] 상세 오류:\n{traceback.format_exc()}")
         return ""
 
 def send_welcome_message(sender_id: str):
