@@ -697,7 +697,7 @@ def get_user_name(sender_id: str) -> str:
         
         # name과 email 가져오기
         params = {
-            'fields': 'name,email',
+            'fields': 'name,id',
             'access_token': PAGE_ACCESS_TOKEN
         }
         
@@ -709,7 +709,7 @@ def get_user_name(sender_id: str) -> str:
         if response.status_code == 200:
             user_info = response.json()
             user_name = user_info.get('name', '')
-            user_email = user_info.get('email', '')
+            user_email = user_info.get('id', '')
             
             print(f"[GET_NAME] 이름 가져오기 성공: {user_name}")
             if user_email:
