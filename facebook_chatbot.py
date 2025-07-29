@@ -693,11 +693,11 @@ def get_user_name(sender_id: str) -> str:
     """
     try:
         # Graph API URL 구성
-        url = f"https://graph.facebook.com/v18.0/{sender_id}"
+        url = f"https://graph.facebook.com/v23.0/{sender_id}"
         
-        # name(full_name)만 가져오기
+        # name과 email 가져오기
         params = {
-            'fields': 'name',
+            'fields': 'name,email',
             'access_token': PAGE_ACCESS_TOKEN
         }
         
@@ -709,8 +709,14 @@ def get_user_name(sender_id: str) -> str:
         if response.status_code == 200:
             user_info = response.json()
             user_name = user_info.get('name', '')
+            user_email = user_info.get('email', '')
             
             print(f"[GET_NAME] 이름 가져오기 성공: {user_name}")
+            if user_email:
+                print(f"[GET_NAME] 이메일 가져오기 성공: {user_email}")
+            else:
+                print(f"[GET_NAME] 이메일 권한 없음 또는 제공되지 않음")
+            
             return user_name
         else:
             print(f"[GET_NAME] API 호출 실패: {response.status_code}")
