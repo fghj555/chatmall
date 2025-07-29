@@ -3333,7 +3333,7 @@ async def handle_chatmall_search_with_triggers(data: ExtendedChatmallRequest, se
             )
         
         print(f"🔍 [CHATMALL_SEARCH] 검색 요청: {data.query}")
-        
+        print(f" 유저 ID: {session_id}")
         # AI 검색 실행
         result = external_search_and_generate_response(data.query, session_id)
         
