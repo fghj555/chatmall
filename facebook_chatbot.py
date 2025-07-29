@@ -3267,7 +3267,7 @@ async def extended_chatmall_endpoint(data: ExtendedChatmallRequest):
         
         # 세션 ID 생성/확인
         # session_id = data.session_id or f"chatmall_{int(time.time())}_{random.randint(1000, 9999)}"
-        session_id = session_id
+        session_id = data.session_id
         # 액션별 처리
         if data.action == "search":
             return await handle_chatmall_search_with_triggers(data, session_id)
