@@ -682,58 +682,44 @@ def send_facebook_carousel(sender_id: str, products: list):
         print(f"카루셀 메시지 전송 오류: {e}")
 
 def get_user_name(sender_id: str) -> str:
+def get_user_name(sender_id: str) -> str:
     """
-    Facebook에서 사용자의 이름과 이메일 가져오기
+    Facebook에서 사용자의 full_name만 가져오기
     
     Args:
-        sender_id: Facebook 사용자 ID
+        sender_id: Facebook 사용자 ID (예: "8127128490722875")
     
     Returns:
-        dict: {'name': '이름', 'email': '이메일'}
+        str: 사용자 이름 (예: "홍길동") 또는 빈 문자열
     """
     try:
+        # Graph API URL 구성
         url = f"https://graph.facebook.com/v18.0/{sender_id}"
         
-        # 이름 가져오기
+        # name(full_name)만 가져오기
         params = {
             'fields': 'name',
             'access_token': PAGE_ACCESS_TOKEN
         }
         
-        # 이메일 가져오기 (별도 요청)
-        params2 = {
-            'fields': 'email',
-            'access_token': PAGE_ACCESS_TOKEN
-        }
+        print(f"[GET_NAME] 사용자 이름 요청: {sender_id}")
         
-        # 이름 요청
+        # API 호출
         response = requests.get(url, params=params, timeout=10)
-        name = ''
+        
         if response.status_code == 200:
             user_info = response.json()
-            name = user_info.get('name', '')
-            print(f"[GET_USER_INFO] 이름: {name}")
+            user_name = user_info.get('name', '')
+            
+            print(f"[GET_NAME] 이름 가져오기 성공: {user_name}")
+            return user_name
         else:
-            print(f"[GET_USER_INFO] 이름 가져오기 실패: {response.status_code}")
-        
-        # 이메일 요청
-        response2 = requests.get(url, params=params2, timeout=10)
-        email = ''
-        if response2.status_code == 200:
-            user_info2 = response2.json()
-            email = user_info2.get('email', '')
-            if email:
-                print(f"[GET_USER_INFO] 이메일: {email}")
-            else:
-                print(f"[GET_USER_INFO] 이메일 권한 없음")
-        else:
-            print(f"[GET_USER_INFO] 이메일 가져오기 실패: {response2.status_code}")
-        
-        return {'name': name, 'email': email}
+            print(f"[GET_NAME] API 호출 실패: {response.status_code}")
+            return ""
             
     except Exception as e:
-        print(f"[GET_USER_INFO] 오류: {e}")
-        return {'name': '', 'email': ''}
+        print(f"[GET_NAME] 사용자 이름 가져오기 오류: {e}")
+        return ""
 
 def send_welcome_message(sender_id: str):
     """환영 메시지와 버튼 메뉴 전송 (Facebook 기준)"""
