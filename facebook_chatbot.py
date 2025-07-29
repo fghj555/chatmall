@@ -683,54 +683,42 @@ def send_facebook_carousel(sender_id: str, products: list):
 
 def get_user_name(sender_id: str) -> str:
     """
-    Facebook에서 사용자 정보 가져오기 (이름 + 웹훅 이메일)
+    Facebook에서 사용자의 full_name만 가져오기
     
     Args:
         sender_id: Facebook 사용자 ID (예: "8127128490722875")
     
     Returns:
-        dict: {
-            'name': '사용자 이름' or '',
-            'email': '웹훅에서 받은 이메일' or ''
-        }
+        str: 사용자 이름 (예: "홍길동") 또는 빈 문자열
     """
     try:
-        # 1. Graph API로 이름 가져오기
-        url = f"https://graph.facebook.com/v21.0/{sender_id}"
+        # Graph API URL 구성
+        url = f"https://graph.facebook.com/v18.0/{sender_id}"
+        
+        # name(full_name)만 가져오기
         params = {
             'fields': 'name',
             'access_token': PAGE_ACCESS_TOKEN
         }
         
-        print(f"[GET_USER_INFO] 사용자 정보 요청: {sender_id}")
+        print(f"[GET_NAME] 사용자 이름 요청: {sender_id}")
         
         # API 호출
         response = requests.get(url, params=params, timeout=10)
         
-        user_name = ""
         if response.status_code == 200:
             user_info = response.json()
             user_name = user_info.get('name', '')
-            print(f"[GET_USER_INFO] 이름 가져오기 성공: {user_name}")
+            
+            print(f"[GET_NAME] 이름 가져오기 성공: {user_name}")
+            return user_name
         else:
-            print(f"[GET_USER_INFO] API 호출 실패: {response.status_code}")
-        
-        # 2. 웹훅에서 받은 이메일 확인
-        webhook_email = get_webhook_email(sender_id)
-        
-        if webhook_email:
-            print(f"[GET_USER_INFO] 웹훅 이메일 확인: {webhook_email}")
-        else:
-            print(f"[GET_USER_INFO] 웹훅 이메일 없음")
-        
-        return {
-            'name': user_name,
-            'email': webhook_email
-        }
+            print(f"[GET_NAME] API 호출 실패: {response.status_code}")
+            return ""
             
     except Exception as e:
-        print(f"[GET_USER_INFO] 사용자 정보 가져오기 오류: {e}")
-        return {'name': '', 'email': ''}
+        print(f"[GET_NAME] 사용자 이름 가져오기 오류: {e}")
+        return ""
 
 def send_welcome_message(sender_id: str):
     """환영 메시지와 버튼 메뉴 전송 (Facebook 기준)"""
@@ -2497,83 +2485,35 @@ async def verify_webhook(request: Request):
 
 @app.post("/webhook")
 async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
-    """Facebook 웹훅 처리 (이메일 웹훅 포함)"""
+    """Facebook 웹훅 메시지 처리"""
     try:
         data = await request.json()
-        print(f"📥 웹훅 수신: {json.dumps(data, indent=2, ensure_ascii=False)}")
         
-        # 이메일 웹훅 처리
-        if 'field' in data and data.get('field') == 'email':
-            result = handle_email_webhook(data)
-            print(f"📧 이메일 웹훅 처리 결과: {result}")
-            return {"status": "email_webhook_processed", "result": result}
+        # 불필요한 이벤트 필터링
+        should_log = False
+        for entry in data.get("entry", []):
+            for messaging in entry.get("messaging", []):
+                # 실제 메시지나 postback만 출력
+                if "message" in messaging and messaging["message"].get("text"):
+                    should_log = True
+                elif "postback" in messaging:
+                    should_log = True
         
-        # 기존 Messenger 웹훅 처리
+        # 의미있는 이벤트만 출력
+        if should_log:
+            print(f"📥 받은 메시지: {json.dumps(data, indent=2, ensure_ascii=False)}")
+        
+        # 즉시 성공 응답 반환 (5초 제한 준수)
         if data.get("object") == "page":
+            # 백그라운드에서 메시지 처리
             background_tasks.add_task(process_webhook_data, data)
-            return {"status": "messenger_webhook_received"}
+            return {"status": "success"}  # 즉시 응답
         
-        # 기타 웹훅
-        return {"status": "unknown_webhook"}
+        return {"status": "success"}
 
     except Exception as e:
         print(f"❌ 웹훅 처리 오류: {e}")
-        return {"status": "error", "message": str(e)}
-        
-# 웹훅 이메일 저장소 (전역 변수 또는 Redis/DB 사용)
-WEBHOOK_EMAILS = {}
-
-def get_webhook_email(sender_id: str) -> str:
-    """웹훅에서 받은 이메일 조회"""
-    return WEBHOOK_EMAILS.get(sender_id, '')
-
-def save_webhook_email(sender_id: str, email: str):
-    """웹훅에서 받은 이메일 저장"""
-    WEBHOOK_EMAILS[sender_id] = email
-    print(f"[WEBHOOK_EMAIL] 이메일 저장: {sender_id} -> {email}")
-    
-def handle_email_webhook(webhook_data: dict):
-    """
-    이메일 웹훅 처리 함수
-    Facebook 개발자 도구에서 보내는 이메일 테스트 처리
-    
-    샘플 데이터: {"field": "email", "value": "example_email@facebook.com"}
-    """
-    try:
-        print(f"[EMAIL_WEBHOOK] 웹훅 데이터 수신: {webhook_data}")
-        
-        # 이메일 웹훅 데이터 확인
-        if webhook_data.get('field') == 'email':
-            email_value = webhook_data.get('value', '')
-            
-            if email_value:
-                # 테스트용 sender_id (실제로는 웹훅에서 전달받아야 함)
-                test_sender_id = "8127128490722875"  # 실제 구현시 동적으로 설정
-                
-                # 웹훅 이메일 저장
-                save_webhook_email(test_sender_id, email_value)
-                
-                print(f"[EMAIL_WEBHOOK] ✅ 이메일 웹훅 처리 성공")
-                print(f"   필드: {webhook_data.get('field')}")
-                print(f"   값: {email_value}")
-                print(f"   사용자 ID: {test_sender_id}")
-                
-                return {
-                    'status': 'success',
-                    'message': '이메일 웹훅 처리 완료',
-                    'email': email_value,
-                    'sender_id': test_sender_id
-                }
-            else:
-                print(f"[EMAIL_WEBHOOK] ❌ 이메일 값이 비어있음")
-                return {'status': 'error', 'message': '이메일 값 없음'}
-        else:
-            print(f"[EMAIL_WEBHOOK] ❌ 이메일 필드가 아님: {webhook_data.get('field')}")
-            return {'status': 'error', 'message': '이메일 필드 아님'}
-            
-    except Exception as e:
-        print(f"[EMAIL_WEBHOOK] ❌ 웹훅 처리 오류: {e}")
-        return {'status': 'error', 'message': str(e)}
+        return {"status": "success"}  # 오류 발생해도 성공 응답 (재시도 방지)
 
 async def process_webhook_data(data: dict):
     """웹훅 데이터 백그라운드 처리"""
