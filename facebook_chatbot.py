@@ -730,7 +730,7 @@ def send_welcome_message(sender_id: str):
     # 환영 텍스트 메시지
     if user_name:
         welcome_text = (
-            f"Welcome! {user_name},{user_email}\n"
+            f"Welcome! {user_name}\n"
             f"Thank you for contacting ChatMall.\n"
             f"Our Chatbot helps foreigners in Korea shop easily.\n"
             f"Looking for something? Just type it in!"
