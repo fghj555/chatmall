@@ -683,7 +683,7 @@ def send_facebook_carousel(sender_id: str, products: list):
 
 def get_user_name(sender_id: str) -> str:
     """
-    Facebook에서 사용자의 full_name 가져오기 (이메일 디버깅 포함)
+    Facebook에서 사용자의 full_name 가져오기 (상세한 필드 분석 포함)
     
     Args:
         sender_id: Facebook 사용자 ID (예: "8127128490722875")
@@ -704,7 +704,7 @@ def get_user_name(sender_id: str) -> str:
         print(f"[GET_NAME] 사용자 정보 요청: {sender_id}")
         print(f"[GET_NAME] 요청 URL: {url}")
         print(f"[GET_NAME] 요청 파라미터: fields={params['fields']}")
-        print(f"[GET_NAME] 액세스 토큰 앞 10자리: {PAGE_ACCESS_TOKEN[:10]}...")
+        print(f"[GET_NAME] 액세스 토큰 앞 10자리: {PAGE_ACCESS_TOKEN[:10] if PAGE_ACCESS_TOKEN else 'None'}...")
         
         # API 호출
         response = requests.get(url, params=params, timeout=10)
@@ -713,72 +713,161 @@ def get_user_name(sender_id: str) -> str:
         
         if response.status_code == 200:
             user_info = response.json()
-            print(f"[GET_NAME] 전체 응답 데이터: {user_info}")
             
+            # ============================================
+            # 🔍 상세한 Facebook API 응답 분석
+            # ============================================
+            print("\n" + "="*60)
+            print("🔍 FACEBOOK API 응답 상세 분석")
+            print("="*60)
+            
+            print(f"📱 요청한 필드: name,email")
+            print(f"📦 받은 전체 응답: {user_info}")
+            print(f"🔑 응답에 포함된 키들: {list(user_info.keys())}")
+            print(f"📊 응답 크기: {len(user_info)}개 필드")
+            
+            # ============================================
+            # 📝 NAME 필드 분석
+            # ============================================
+            print(f"\n👤 NAME 필드 분석:")
+            if 'name' in user_info:
+                name_value = user_info['name']
+                if name_value:
+                    print(f"✅ name 필드: 존재하고 값 있음 → '{name_value}'")
+                    print(f"   📝 이름 타입: {type(name_value)}")
+                    print(f"   📏 이름 길이: {len(name_value)}자")
+                else:
+                    print(f"⚠️ name 필드: 존재하지만 값이 비어있음")
+            else:
+                print(f"❌ name 필드: 응답에 포함되지 않음")
+            
+            # ============================================
+            # 📧 EMAIL 필드 상세 분석
+            # ============================================
+            print(f"\n📧 EMAIL 필드 상세 분석:")
+            
+            # 1단계: 필드 존재 여부 확인
+            if 'email' in user_info:
+                email_value = user_info['email']
+                print(f"✅ email 필드: 응답에 포함됨")
+                
+                # 2단계: 값 존재 여부 확인
+                if email_value:
+                    print(f"✅ email 값: 존재함 → '{email_value}'")
+                    print(f"   📝 이메일 타입: {type(email_value)}")
+                    print(f"   📏 이메일 길이: {len(email_value)}자")
+                    print(f"   🔍 '@' 포함 여부: {'@' in email_value}")
+                    
+                    # 이메일 형식 간단 검증
+                    if '@' in email_value and '.' in email_value:
+                        print(f"   ✅ 이메일 형식: 유효해 보임")
+                    else:
+                        print(f"   ⚠️ 이메일 형식: 의심스러움")
+                        
+                elif email_value == "":
+                    print(f"⚠️ email 값: 빈 문자열 (권한 있지만 값 없음)")
+                    print(f"   📝 값의 타입: {type(email_value)}")
+                    print(f"   🔍 가능한 원인: 사용자가 이메일을 비공개로 설정")
+                else:
+                    print(f"⚠️ email 값: None 또는 기타 값 → '{email_value}'")
+                    print(f"   📝 값의 타입: {type(email_value)}")
+                    
+            else:
+                print(f"❌ email 필드: 응답에 포함되지 않음")
+                print(f"   🔍 가능한 원인 분석:")
+                print(f"     1️⃣ 앱에 'email' 권한이 승인되지 않음")
+                print(f"     2️⃣ 사용자가 앱 설치 시 이메일 권한을 거부함")
+                print(f"     3️⃣ 사용자의 Facebook 개인정보 설정에서 이메일 공유 차단")
+                print(f"     4️⃣ 앱이 개발 모드이고 테스터가 아닌 일반 사용자")
+                print(f"   📋 확인해야 할 사항:")
+                print(f"     • Facebook 개발자 콘솔 → App Review → 'email' 권한 상태")
+                print(f"     • 앱 모드: 개발(Development) vs 라이브(Live)")
+                print(f"     • 사용자 Facebook 설정 → 개인정보 → 앱 및 웹사이트")
+            
+            # ============================================
+            # 🔍 기타 필드들 분석
+            # ============================================
+            other_fields = {k: v for k, v in user_info.items() if k not in ['name', 'email']}
+            if other_fields:
+                print(f"\n🔍 기타 필드들:")
+                for key, value in other_fields.items():
+                    print(f"   {key}: {value} (타입: {type(value)})")
+            else:
+                print(f"\n📝 기타 필드: 없음")
+            
+            # ============================================
+            # 📊 권한 상태 요약
+            # ============================================
+            print(f"\n📊 권한 상태 요약:")
+            name_status = "✅ 성공" if user_info.get('name') else "❌ 실패"
+            email_status = "✅ 성공" if user_info.get('email') else "❌ 실패"
+            
+            print(f"   👤 이름 가져오기: {name_status}")
+            print(f"   📧 이메일 가져오기: {email_status}")
+            
+            if user_info.get('email'):
+                print(f"   🎉 결론: 이름과 이메일 모두 정상적으로 가져왔습니다!")
+            elif user_info.get('name'):
+                print(f"   ⚠️ 결론: 이름만 가져왔습니다. 이메일 권한 문제가 있습니다.")
+            else:
+                print(f"   🚨 결론: 기본 정보도 가져오지 못했습니다. 토큰이나 권한에 심각한 문제가 있습니다.")
+            
+            print("="*60)
+            
+            # 결과 반환 (이름만)
             user_name = user_info.get('name', '')
             user_email = user_info.get('email', '')
             
-            print(f"[GET_NAME] 파싱된 이름: '{user_name}'")
-            print(f"[GET_NAME] 파싱된 이메일: '{user_email}'")
-            
-            # 이메일이 없는 경우 상세 분석
-            if not user_email:
-                print("=" * 50)
-                print("[EMAIL_DEBUG] 이메일을 가져올 수 없는 이유 분석:")
-                
-                # 1. 응답에 이메일 필드가 아예 없는 경우
-                if 'email' not in user_info:
-                    print("  ❌ 1. 응답에 'email' 필드가 없음")
-                    print("     - 앱에 email 권한이 승인되지 않았을 가능성")
-                    print("     - 사용자가 이메일 공유를 거부했을 가능성")
-                else:
-                    print("  ✅ 1. 응답에 'email' 필드는 존재함")
-                    print(f"     - 값: '{user_info['email']}'")
-                
-                # 2. 앱 권한 확인 방법 안내
-                print("  📋 2. 확인해야 할 사항들:")
-                print("     - Facebook 개발자 콘솔에서 'email' 권한이 승인되었는지 확인")
-                print("     - 앱이 라이브 모드인지 개발 모드인지 확인")
-                print("     - 사용자가 앱에 이메일 권한을 부여했는지 확인")
-                print("     - 사용자의 Facebook 개인정보 설정 확인")
-                print("=" * 50)
-            else:
-                print(f"[GET_NAME] ✅ 이메일 가져오기 성공: {user_email}")
+            print(f"[GET_NAME] 최종 반환값: '{user_name}'")
+            if user_email:
+                print(f"[GET_NAME] 확인된 이메일: '{user_email}' (함수는 이름만 반환)")
             
             return user_name
+            
         else:
-            error_response = response.text
+            # ============================================
+            # ❌ API 호출 실패 분석
+            # ============================================
+            print(f"\n❌ Facebook API 호출 실패 분석:")
+            print(f"   상태 코드: {response.status_code}")
+            
             try:
                 error_json = response.json()
-                print(f"[GET_NAME] ❌ API 오류 응답: {error_json}")
+                print(f"   오류 응답: {error_json}")
                 
-                # Facebook Graph API 오류 코드 분석
                 if 'error' in error_json:
                     error_code = error_json['error'].get('code')
                     error_message = error_json['error'].get('message', '')
                     error_type = error_json['error'].get('type', '')
                     
-                    print(f"[GET_NAME] 오류 코드: {error_code}")
-                    print(f"[GET_NAME] 오류 메시지: {error_message}")
-                    print(f"[GET_NAME] 오류 타입: {error_type}")
+                    print(f"   📊 오류 상세:")
+                    print(f"     코드: {error_code}")
+                    print(f"     메시지: {error_message}")
+                    print(f"     타입: {error_type}")
                     
-                    # 권한 관련 오류 코드들
-                    if error_code == 10:
-                        print("  ⚠️  권한 부족 오류 - 앱에 필요한 권한이 없습니다")
-                    elif error_code == 200:
-                        print("  ⚠️  권한 부족 오류 - 사용자가 권한을 거부했습니다")
-                    elif error_code == 190:
-                        print("  ⚠️  액세스 토큰 오류 - 토큰이 만료되었거나 유효하지 않습니다")
-                        
-            except:
-                print(f"[GET_NAME] ❌ API 호출 실패 (응답 파싱 불가): {error_response}")
+                    # 일반적인 오류 코드 해석
+                    error_explanations = {
+                        10: "권한 부족 - 앱에 필요한 권한이 없습니다",
+                        190: "액세스 토큰 오류 - 토큰이 만료되었거나 유효하지 않습니다",
+                        200: "권한 부족 - 사용자가 권한을 거부했습니다",
+                        803: "일부 필드에 대한 권한이 없습니다",
+                        100: "잘못된 매개변수입니다"
+                    }
+                    
+                    if error_code in error_explanations:
+                        print(f"   💡 해석: {error_explanations[error_code]}")
+                    
+            except Exception as parse_error:
+                print(f"   응답 파싱 실패: {response.text}")
+                print(f"   파싱 오류: {parse_error}")
             
             return ""
             
     except Exception as e:
         print(f"[GET_NAME] ❌ 전체 처리 오류: {e}")
         import traceback
-        print(f"[GET_NAME] 상세 오류:\n{traceback.format_exc()}")
+        print(f"[GET_NAME] 상세 오류 추적:")
+        print(traceback.format_exc())
         return ""
 
 def send_welcome_message(sender_id: str):
