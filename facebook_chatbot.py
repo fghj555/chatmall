@@ -2519,7 +2519,19 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
     except Exception as e:
         print(f"❌ 웹훅 처리 오류: {e}")
         return {"status": "error", "message": str(e)}
+        
+# 웹훅 이메일 저장소 (전역 변수 또는 Redis/DB 사용)
+WEBHOOK_EMAILS = {}
 
+def get_webhook_email(sender_id: str) -> str:
+    """웹훅에서 받은 이메일 조회"""
+    return WEBHOOK_EMAILS.get(sender_id, '')
+
+def save_webhook_email(sender_id: str, email: str):
+    """웹훅에서 받은 이메일 저장"""
+    WEBHOOK_EMAILS[sender_id] = email
+    print(f"[WEBHOOK_EMAIL] 이메일 저장: {sender_id} -> {email}")
+    
 def handle_email_webhook(webhook_data: dict):
     """
     이메일 웹훅 처리 함수
