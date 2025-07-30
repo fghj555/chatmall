@@ -106,7 +106,7 @@ print("✅ Milvus에 연결되었습니다.")
 
 # 한국 시간대 설정
 korea_timezone = pytz.timezone('Asia/Seoul')
-# 현재 시간을 한국 시간대로 가져
+# 현재 시간을 한국 시간대 가져오기
 current_time_kst = datetime.now(korea_timezone)
 
 # 컬렉션 이름
@@ -4120,7 +4120,7 @@ async def view_conversations_web():
                         <div class="stat-label">총 메시지</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number">{{ current_time_display }}</div>
+                        <div class="stat-number">{current_time_kst.strftime('%H:%M')}</div>
                         <div class="stat-label">마지막 업데이트</div>
                     </div>
                 </div>
