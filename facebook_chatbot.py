@@ -694,71 +694,76 @@ def send_facebook_message(sender_id: str, text: str):
         print(f"메시지 전송 오류: {e}")
 
 def send_facebook_carousel(sender_id: str, products: list):
-    """Facebook Messenger API로 카루셀 메시지 전송 (중복 방지)"""
-    url = f"https://graph.facebook.com/v18.0/me/messages"
-    
-    elements = []
-    for product in products[:10]:  # 최대 10개
-        try:
-            price = int(float(product.get("가격", 0)))
-            shipping = int(float(product.get("배송비", 0)))
-        except:
-            price = 0
-            shipping = 0
-        
-        product_code = product.get("상품코드", "")
-        
-        element = {
-            "title": product.get("제목", "상품")[:80],  # 80자 제한
-            "subtitle": f"가격: {price:,}원\n배송비: {shipping:,}원\n원산지: {product.get('원산지', '')}",
-            "image_url": product.get("이미지", ""),
-            "buttons": [
-                {
-                    "type": "web_url",
-                    "url": product.get("상품링크", "#"),
-                    "title": "View Product"
-                },
-                {
-                    "type": "postback",
-                    "title": "Buy Now",
-                    "payload": f"BUY_{product_code}"
-                }
-            ]
-        }
-        elements.append(element)
-    
-    data = {
-        'recipient': {'id': sender_id},
-        'message': {
-            'attachment': {
-                'type': 'template',
-                'payload': {
-                    'template_type': 'generic',
-                    'elements': elements
-                }
-            }
-        },
-        'access_token': PAGE_ACCESS_TOKEN,
-        'messaging_type': 'RESPONSE'  # 응답 타입 명시
-    }
-    
-    headers = {'Content-Type': 'application/json'}
-    
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        if response.status_code == 200:
-            result = response.json()
-            message_id = result.get("message_id")
-            print(f"카루셀 메시지 전송 성공 (ID: {message_id})")
-            
-            ConversationLogger.log_bot_message(sender_id, f"[상품 카루셀] {len(products)}개 상품 전송")
-            # ✅ 봇이 보낸 메시지 ID 기록
-            if message_id:
-                BOT_MESSAGES.add(message_id)
-        else:
-            print(f"카루셀 메시지 전송 실패: {response.status_code} - {response.text}")
-    except Exception as e:
-        print(f"카루셀 메시지 전송 오류: {e}")
+   """Facebook Messenger API로 카루셀 메시지 전송 (중복 방지)"""
+   url = f"https://graph.facebook.com/v18.0/me/messages"
+   
+   elements = []
+   for product in products[:10]:  # 최대 10개
+       try:
+           price = int(float(product.get("가격", 0)))
+           shipping = int(float(product.get("배송비", 0)))
+       except:
+           price = 0
+           shipping = 0
+       
+       product_code = product.get("상품코드", "")
+       
+       element = {
+           "title": product.get("제목", "상품")[:80],  # 80자 제한
+           "subtitle": f"가격: {price:,}원\n배송비: {shipping:,}원\n원산지: {product.get('원산지', '')}",
+           "image_url": product.get("이미지", ""),
+           "buttons": [
+               {
+                   "type": "web_url",
+                   "url": product.get("상품링크", "#"),
+                   "title": "View Product"
+               },
+               {
+                   "type": "postback",
+                   "title": "Buy Now",
+                   "payload": f"BUY_{product_code}"
+               }
+           ]
+       }
+       elements.append(element)
+   
+   data = {
+       'recipient': {'id': sender_id},
+       'message': {
+           'attachment': {
+               'type': 'template',
+               'payload': {
+                   'template_type': 'generic',
+                   'elements': elements
+               }
+           }
+       },
+       'access_token': PAGE_ACCESS_TOKEN,
+       'messaging_type': 'RESPONSE'  # 응답 타입 명시
+   }
+   
+   headers = {'Content-Type': 'application/json'}
+   
+   try:
+       response = requests.post(url, headers=headers, json=data)
+       if response.status_code == 200:
+           result = response.json()
+           message_id = result.get("message_id")
+           print(f"카루셀 메시지 전송 성공 (ID: {message_id})")
+           
+           # 카루셀 메시지 로깅 (상품 정보 포함)
+           carousel_text = f"[상품 카루셀] {len(products)}개 상품 전송"
+           for i, product in enumerate(products[:3], 1):  # 처음 3개만 표시
+               carousel_text += f"\n{i}. {product.get('제목', '상품')} - {product.get('가격', 0):,}원"
+           ConversationLogger.log_bot_message(sender_id, carousel_text)
+           
+           # ✅ 봇이 보낸 메시지 ID 기록
+           if message_id:
+               BOT_MESSAGES.add(message_id)
+       else:
+           print(f"카루셀 메시지 전송 실패: {response.status_code} - {response.text}")
+   except Exception as e:
+       print(f"카루셀 메시지 전송 오류: {e}")
 
 def get_user_name(sender_id: str) -> str:
     """
