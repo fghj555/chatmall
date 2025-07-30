@@ -118,6 +118,8 @@ print("사용자 정보는 JSON 파일에 저장됩니다.")
 # JSON 파일 기반 사용자 데이터 저장소
 USER_DATA_FILE = "user_data.json"
 ORDER_DATA_FILE = "order_data.json"
+CONVERSATION_DATA_FILE = "facebook_conversations.json"
+
 # 상품 캐시 (전역 선언)
 PRODUCT_CACHE = {}
 PROCESSED_MESSAGES = set()
@@ -285,6 +287,81 @@ class OrderDataManager:
         except Exception as e:
             print(f"주문 데이터 삭제 오류: {e}")
             return False
+
+class ConversationLogger:
+    """Facebook 대화내용 사용자별 JSON 저장 클래스"""
+    
+    @staticmethod
+    def load_conversations() -> dict:
+        """저장된 대화 기록 로드"""
+        try:
+            if os.path.exists(CONVERSATION_DATA_FILE):
+                with open(CONVERSATION_DATA_FILE, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            return {}
+        except Exception as e:
+            print(f"대화 기록 로드 오류: {e}")
+            return {}
+
+@staticmethod
+    def save_conversations(data: dict) -> bool:
+        """대화 기록 저장"""
+        try:
+            with open(CONVERSATION_DATA_FILE, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception as e:
+            print(f"대화 기록 저장 오류: {e}")
+            return False
+    
+    @staticmethod
+    def log_message(sender_id: str, message_type: str, content: str) -> bool:
+        """
+        개별 메시지 로그 저장
+        
+        Args:
+            sender_id: Facebook 사용자 ID
+            message_type: 'user' 또는 'bot'
+            content: 메시지 내용
+        """
+        try:
+            conversations = ConversationLogger.load_conversations()
+            
+            # 사용자별 대화 기록 초기화
+            if sender_id not in conversations:
+                conversations[sender_id] = []
+            
+            # 메시지 데이터 구성
+            message_data = {
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "type": message_type,  # 'user' 또는 'bot'
+                "message": content
+            }
+            
+            # 대화 기록에 추가
+            conversations[sender_id].append(message_data)
+            
+            # JSON 파일에 저장
+            success = ConversationLogger.save_conversations(conversations)
+            
+            if success:
+                print(f"[CONVERSATION] 메시지 저장: {sender_id} - {message_type}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"[CONVERSATION] 메시지 로그 오류: {e}")
+            return False
+    
+    @staticmethod
+    def log_user_message(sender_id: str, user_message: str) -> bool:
+        """사용자 메시지 로그"""
+        return ConversationLogger.log_message(sender_id, "user", user_message)
+    
+    @staticmethod
+    def log_bot_message(sender_id: str, bot_message: str) -> bool:
+        """봇 메시지 로그"""
+        return ConversationLogger.log_message(sender_id, "bot", bot_message)
 
 def init_google_sheets():
     """Google Sheets 연결 초기화 (환경변수 + Fallback)"""
@@ -601,7 +678,8 @@ def send_facebook_message(sender_id: str, text: str):
             result = response.json()
             message_id = result.get("message_id")
             print(f"메시지 전송 성공: {text[:50]}... (ID: {message_id})")
-            
+
+            ConversationLogger.log_bot_message(sender_id, text)
             # 봇이 보낸 메시지 ID 기록
             if message_id:
                 BOT_MESSAGES.add(message_id)
@@ -673,6 +751,7 @@ def send_facebook_carousel(sender_id: str, products: list):
             message_id = result.get("message_id")
             print(f"카루셀 메시지 전송 성공 (ID: {message_id})")
             
+            ConversationLogger.log_bot_message(sender_id, f"[상품 카루셀] {len(products)}개 상품 전송")
             # ✅ 봇이 보낸 메시지 ID 기록
             if message_id:
                 BOT_MESSAGES.add(message_id)
@@ -2480,6 +2559,7 @@ async def process_webhook_data(data: dict):
                             message_id in BOT_MESSAGES or 
                             not user_message):
                             continue
+                        ConversationLogger.log_user_message(sender_id, user_message)
                         
                         # 퀵 리플라이 처리
                         quick_reply = message.get("quick_reply")
@@ -3861,7 +3941,428 @@ async def handle_chatmall_reset_with_triggers(data: ExtendedChatmallRequest, ses
             content={"status": "error", "error": str(e), "action": "reset"}
         )
 
+# 테스트
+@app.get("/view-conversations", response_class=HTMLResponse)
+async def view_conversations_web():
+    """웹 브라우저에서 대화 기록을 예쁘게 볼 수 있는 페이지"""
+    try:
+        # JSON 파일 읽기
+        if os.path.exists(CONVERSATION_DATA_FILE):
+            with open(CONVERSATION_DATA_FILE, 'r', encoding='utf-8') as f:
+                conversations = json.load(f)
+        else:
+            conversations = {}
+        
+        # HTML 생성
+        html_content = """
+        <!DOCTYPE html>
+        <html lang="ko">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Facebook 대화 기록</title>
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background-color: #f5f5f5;
+                }
+                .container {
+                    max-width: 1200px;
+                    margin: 0 auto;
+                }
+                .header {
+                    background: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin-bottom: 20px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+                .user-card {
+                    background: white;
+                    margin-bottom: 20px;
+                    border-radius: 8px;
+                    overflow: hidden;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+                .user-header {
+                    background: #1877f2;
+                    color: white;
+                    padding: 15px 20px;
+                    font-weight: bold;
+                    cursor: pointer;
+                }
+                .user-header:hover {
+                    background: #166fe5;
+                }
+                .messages {
+                    max-height: 400px;
+                    overflow-y: auto;
+                    padding: 0;
+                    display: none;
+                }
+                .message {
+                    padding: 10px 20px;
+                    border-bottom: 1px solid #eee;
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 10px;
+                }
+                .message:last-child {
+                    border-bottom: none;
+                }
+                .message.user {
+                    background: #f0f2f5;
+                }
+                .message.bot {
+                    background: #e3f2fd;
+                }
+                .message-type {
+                    font-weight: bold;
+                    min-width: 40px;
+                    font-size: 12px;
+                }
+                .user-type { color: #1877f2; }
+                .bot-type { color: #4caf50; }
+                .message-content {
+                    flex: 1;
+                    word-break: break-word;
+                }
+                .timestamp {
+                    font-size: 11px;
+                    color: #666;
+                    margin-top: 5px;
+                }
+                .stats {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 15px;
+                    margin-bottom: 20px;
+                }
+                .stat-card {
+                    background: white;
+                    padding: 15px;
+                    border-radius: 8px;
+                    text-align: center;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+                .stat-number {
+                    font-size: 24px;
+                    font-weight: bold;
+                    color: #1877f2;
+                }
+                .stat-label {
+                    font-size: 14px;
+                    color: #666;
+                    margin-top: 5px;
+                }
+                .refresh-btn {
+                    background: #1877f2;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    font-size: 14px;
+                }
+                .refresh-btn:hover {
+                    background: #166fe5;
+                }
+                .search-box {
+                    width: 100%;
+                    padding: 10px;
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    margin-bottom: 20px;
+                    font-size: 14px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>📱 Facebook 대화 기록</h1>
+                    <button class="refresh-btn" onclick="location.reload()">🔄 새로고침</button>
+                    <br><br>
+                    <input type="text" class="search-box" id="searchBox" placeholder="사용자 ID 또는 메시지 내용으로 검색..." onkeyup="searchMessages()">
+                </div>
+                
+                <div class="stats">
+        """
+        
+        # 통계 계산
+        total_users = len(conversations)
+        total_messages = sum(len(msgs) for msgs in conversations.values())
+        
+        html_content += f"""
+                    <div class="stat-card">
+                        <div class="stat-number">{total_users}</div>
+                        <div class="stat-label">총 사용자</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">{total_messages}</div>
+                        <div class="stat-label">총 메시지</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">{datetime.now().strftime('%H:%M')}</div>
+                        <div class="stat-label">마지막 업데이트</div>
+                    </div>
+                </div>
+        """
+        
+        # 사용자별 대화 기록
+        for sender_id, messages in conversations.items():
+            message_count = len(messages)
+            last_message = messages[-1]['timestamp'] if messages else "없음"
+            
+            html_content += f"""
+                <div class="user-card">
+                    <div class="user-header" onclick="toggleMessages('{sender_id}')">
+                        👤 사용자: {sender_id} | 메시지: {message_count}개 | 최근: {last_message}
+                    </div>
+                    <div class="messages" id="messages-{sender_id}">
+            """
+            
+            # 메시지들
+            for msg in messages:
+                msg_type = msg['type']
+                content = msg['message']
+                timestamp = msg['timestamp']
+                
+                type_class = 'user' if msg_type == 'user' else 'bot'
+                type_label = '👤' if msg_type == 'user' else '🤖'
+                type_color = 'user-type' if msg_type == 'user' else 'bot-type'
+                
+                html_content += f"""
+                        <div class="message {type_class}">
+                            <div class="message-type {type_color}">{type_label}</div>
+                            <div class="message-content">
+                                {content}
+                                <div class="timestamp">{timestamp}</div>
+                            </div>
+                        </div>
+                """
+            
+            html_content += """
+                    </div>
+                </div>
+            """
+        
+        html_content += """
+            </div>
+            
+            <script>
+                function toggleMessages(userId) {
+                    const messages = document.getElementById('messages-' + userId);
+                    if (messages.style.display === 'none' || messages.style.display === '') {
+                        messages.style.display = 'block';
+                    } else {
+                        messages.style.display = 'none';
+                    }
+                }
+                
+                function searchMessages() {
+                    const searchTerm = document.getElementById('searchBox').value.toLowerCase();
+                    const userCards = document.querySelectorAll('.user-card');
+                    
+                    userCards.forEach(card => {
+                        const header = card.querySelector('.user-header').textContent.toLowerCase();
+                        const messages = card.querySelectorAll('.message-content');
+                        let hasMatch = header.includes(searchTerm);
+                        
+                        if (!hasMatch) {
+                            messages.forEach(msg => {
+                                if (msg.textContent.toLowerCase().includes(searchTerm)) {
+                                    hasMatch = true;
+                                }
+                            });
+                        }
+                        
+                        card.style.display = hasMatch ? 'block' : 'none';
+                    });
+                }
+                
+                // 5분마다 자동 새로고침
+                setInterval(() => {
+                    location.reload();
+                }, 300000);
+            </script>
+        </body>
+        </html>
+        """
+        
+        return html_content
+        
+    except Exception as e:
+        return f"<h1>오류 발생</h1><p>{str(e)}</p>"
 
+@app.get("/conversations-json")
+async def get_conversations_json():
+    """JSON 형태로 대화 기록 반환"""
+    try:
+        if os.path.exists(CONVERSATION_DATA_FILE):
+            with open(CONVERSATION_DATA_FILE, 'r', encoding='utf-8') as f:
+                conversations = json.load(f)
+        else:
+            conversations = {}
+        
+        return JSONResponse(content={
+            "status": "success",
+            "data": conversations,
+            "total_users": len(conversations),
+            "total_messages": sum(len(msgs) for msgs in conversations.values()),
+            "last_updated": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "error": str(e)}
+        )
+
+@app.get("/download-conversations")
+async def download_conversations():
+    """JSON 파일 다운로드"""
+    try:
+        if os.path.exists(CONVERSATION_DATA_FILE):
+            with open(CONVERSATION_DATA_FILE, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            from fastapi.responses import Response
+            
+            return Response(
+                content=content,
+                media_type="application/json",
+                headers={
+                    "Content-Disposition": f"attachment; filename=facebook_conversations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                }
+            )
+        else:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "대화 기록 파일이 없습니다"}
+            )
+            
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+@app.get("/conversation/{sender_id}")
+async def get_single_conversation(sender_id: str):
+    """특정 사용자의 대화 기록만 조회"""
+    try:
+        if os.path.exists(CONVERSATION_DATA_FILE):
+            with open(CONVERSATION_DATA_FILE, 'r', encoding='utf-8') as f:
+                conversations = json.load(f)
+        else:
+            conversations = {}
+        
+        if sender_id in conversations:
+            return JSONResponse(content={
+                "status": "success",
+                "sender_id": sender_id,
+                "messages": conversations[sender_id],
+                "message_count": len(conversations[sender_id])
+            })
+        else:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"사용자 {sender_id}의 대화 기록이 없습니다"}
+            )
+            
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+@app.delete("/conversations")
+async def clear_all_conversations():
+    """모든 대화 기록 삭제 (주의!)"""
+    try:
+        if os.path.exists(CONVERSATION_DATA_FILE):
+            os.remove(CONVERSATION_DATA_FILE)
+            return JSONResponse(content={
+                "status": "success",
+                "message": "모든 대화 기록이 삭제되었습니다"
+            })
+        else:
+            return JSONResponse(content={
+                "status": "success", 
+                "message": "삭제할 파일이 없습니다"
+            })
+            
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+@app.delete("/conversation/{sender_id}")
+async def clear_user_conversation(sender_id: str):
+    """특정 사용자의 대화 기록만 삭제"""
+    try:
+        if os.path.exists(CONVERSATION_DATA_FILE):
+            with open(CONVERSATION_DATA_FILE, 'r', encoding='utf-8') as f:
+                conversations = json.load(f)
+            
+            if sender_id in conversations:
+                del conversations[sender_id]
+                
+                with open(CONVERSATION_DATA_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(conversations, f, ensure_ascii=False, indent=2)
+                
+                return JSONResponse(content={
+                    "status": "success",
+                    "message": f"사용자 {sender_id}의 대화 기록이 삭제되었습니다"
+                })
+            else:
+                return JSONResponse(
+                    status_code=404,
+                    content={"error": f"사용자 {sender_id}의 대화 기록이 없습니다"}
+                )
+        else:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "대화 기록 파일이 없습니다"}
+            )
+            
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+# 파일 시스템 정보 확인용
+@app.get("/file-info")
+async def get_file_info():
+    """JSON 파일 존재 여부 및 정보 확인"""
+    try:
+        file_info = {
+            "file_path": CONVERSATION_DATA_FILE,
+            "exists": os.path.exists(CONVERSATION_DATA_FILE),
+            "current_directory": os.getcwd(),
+            "files_in_directory": os.listdir(".")
+        }
+        
+        if file_info["exists"]:
+            stat = os.stat(CONVERSATION_DATA_FILE)
+            file_info.update({
+                "file_size": stat.st_size,
+                "last_modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "creation_time": datetime.fromtimestamp(stat.st_ctime).isoformat()
+            })
+        
+        return JSONResponse(content=file_info)
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
 
 
 # FastAPI 서버 실행
