@@ -1299,7 +1299,7 @@ def send_final_order_complete(sender_id: str, product_code: str, quantity: int):
     start_order_info_collection(sender_id, product_code, quantity)
 
 def send_option_selection_buttons(sender_id: str, product_code: str):
-    """옵션 개수에 따라 자동으로 최적 방식 선택"""
+    """모든 옵션을 Button Template 방식으로 처리"""
     import time as time_module
     
     print(f"🔧 [OPTION] 옵션 선택 시작 - sender_id: {sender_id}, product_code: {product_code}")
@@ -1349,210 +1349,134 @@ def send_option_selection_buttons(sender_id: str, product_code: str):
             send_quantity_selection(sender_id, product_code)
             return
         
-        # 옵션 개수에 따른 자동 선택
-        if option_count <= 13:
-            print(f"[OPTION] Quick Reply 방식 사용 ({option_count}개 ≤ 13)")
+        # ===== 모든 옵션을 Button Template 방식으로 처리 =====
+        print(f"[OPTION] Button Template 방식 사용 ({option_count}개)")
+        
+        # 안내 메시지 먼저 전송
+        send_facebook_message(sender_id, "⚙️ Please select an option:")
+        time_module.sleep(1.5)
+        
+        # 총 메시지 수 계산
+        total_messages = math.ceil(len(options) / 3)
+        successful_messages = 0
+        
+        print(f"[OPTION] 전송할 총 메시지 수: {total_messages}")
+        
+        # 3개씩 그룹으로 나누어 각각 별도 메시지로 전송
+        for i in range(0, len(options), 3):
+            message_count = (i // 3) + 1
+            option_group = options[i:i+3]
             
-            # ===== Quick Reply 방식 =====
-            quick_replies = []
-            for i, opt in enumerate(options):
+            print(f"[OPTION] ===== 메시지 {message_count}/{total_messages} 시작 =====")
+            print(f"[OPTION] 이번 그룹 옵션: {option_group}")
+            
+            buttons = []
+            
+            for j, opt in enumerate(option_group):
                 try:
+                    print(f"[OPTION] 옵션 {j+1} 처리 중: '{opt}'")
                     parts = opt.split(",")
                     if len(parts) >= 2:
                         name = parts[0].strip()
                         extra_price = float(parts[1].strip()) if parts[1].strip() else 0
                         
-                        title = f"{name}"
+                        caption = f"{name}"
                         if extra_price > 0:
-                            title += f" (+{int(extra_price):,}원)"
-                            
-                        # Quick Reply 제목 길이 제한 (20자)
-                        if len(title) > 20:
-                            title = title[:17] + "..."
+                            caption += f" (+{int(extra_price):,}원)"
+                        
+                        # Facebook 버튼 제목 길이 제한 (20자)
+                        if len(caption) > 20:
+                            caption = caption[:17] + "..."
                         
                         payload = f'OPTION_{product_code}_{name}_{int(extra_price)}'
                         
-                        quick_replies.append({
-                            'content_type': 'text',
-                            'title': title,
+                        buttons.append({
+                            'type': 'postback',
+                            'title': caption,
                             'payload': payload
                         })
                         
-                        print(f"[OPTION] Quick Reply {i+1} 생성: {title}")
+                        print(f"[OPTION] 버튼 {j+1} 생성 완료: {caption}")
+                    else:
+                        print(f"[OPTION] 옵션 형식 오류: {opt} (parts: {parts})")
                         
                 except Exception as e:
-                    print(f"[OPTION] 옵션 파싱 실패: {opt} → {e}")
+                    print(f"[OPTION] 개별 옵션 파싱 실패: {opt} → {e}")
                     continue
             
-            if not quick_replies:
-                print(f"[OPTION] Quick Reply 버튼 없음")
-                send_quantity_selection(sender_id, product_code)
-                return
+            print(f"[OPTION] 메시지 {message_count} 생성된 버튼 수: {len(buttons)}")
             
-            # Quick Reply 메시지 전송
-            url = f"https://graph.facebook.com/v18.0/me/messages"
-            
-            data = {
-                'recipient': {'id': sender_id},
-                'message': {
-                    'text': f'⚙️ Please select an option:\n\n📦 {product.get("제목", "상품")}',
-                    'quick_replies': quick_replies
-                },
-                'access_token': PAGE_ACCESS_TOKEN,
-                'messaging_type': 'RESPONSE'
-            }
-            
-            headers = {'Content-Type': 'application/json'}
-            
-            try:
-                print(f"[OPTION] Quick Reply HTTP 요청 전송 중...")
-                response = requests.post(url, headers=headers, json=data, timeout=20)
+            # 버튼이 있을 때만 메시지 전송
+            if buttons:
+                print(f"[OPTION] 메시지 {message_count} 전송 시작")
                 
-                print(f"[OPTION] Quick Reply 응답 상태: {response.status_code}")
+                url = f"https://graph.facebook.com/v18.0/me/messages"
                 
-                if response.status_code == 200:
-                    result = response.json()
-                    message_id = result.get("message_id")
-                    print(f"[OPTION] Quick Reply 전송 성공! (ID: {message_id}) - {len(quick_replies)}개 옵션")
-                else:
-                    print(f"[OPTION] Quick Reply 전송 실패: {response.status_code}")
-                    print(f"[OPTION] 응답: {response.text}")
-                    # 실패시 폴백
-                    send_quantity_selection(sender_id, product_code)
-                    
-            except Exception as e:
-                print(f"[OPTION] Quick Reply 전송 오류: {e}")
-                send_quantity_selection(sender_id, product_code)
-        
-        else:
-            print(f"[OPTION] Button Template 방식 사용 ({option_count}개 > 13)")
-            
-            # ===== Button Template 방식 =====
-            # 안내 메시지 먼저 전송
-            send_facebook_message(sender_id, "⚙️ Please select an option:")
-            time_module.sleep(1.5)
-            
-            # 총 메시지 수 계산
-            total_messages = math.ceil(len(options) / 3)
-            successful_messages = 0
-            
-            print(f"[OPTION] 전송할 총 메시지 수: {total_messages}")
-            
-            # 3개씩 그룹으로 나누어 각각 별도 메시지로 전송
-            for i in range(0, len(options), 3):
-                message_count = (i // 3) + 1
-                option_group = options[i:i+3]
-                
-                print(f"[OPTION] ===== 메시지 {message_count}/{total_messages} 시작 =====")
-                print(f"[OPTION] 이번 그룹 옵션: {option_group}")
-                
-                buttons = []
-                
-                for j, opt in enumerate(option_group):
-                    try:
-                        print(f"[OPTION] 옵션 {j+1} 처리 중: '{opt}'")
-                        parts = opt.split(",")
-                        if len(parts) >= 2:
-                            name = parts[0].strip()
-                            extra_price = float(parts[1].strip()) if parts[1].strip() else 0
-                            
-                            caption = f"{name}"
-                            if extra_price > 0:
-                                caption += f" (+{int(extra_price):,}원)"
-                            
-                            # Facebook 버튼 제목 길이 제한 (20자)
-                            if len(caption) > 20:
-                                caption = caption[:17] + "..."
-                            
-                            payload = f'OPTION_{product_code}_{name}_{int(extra_price)}'
-                            
-                            buttons.append({
-                                'type': 'postback',
-                                'title': caption,
-                                'payload': payload
-                            })
-                            
-                            print(f"[OPTION] 버튼 {j+1} 생성 완료: {caption}")
-                        else:
-                            print(f"[OPTION] 옵션 형식 오류: {opt} (parts: {parts})")
-                            
-                    except Exception as e:
-                        print(f"[OPTION] 개별 옵션 파싱 실패: {opt} → {e}")
-                        continue
-                
-                print(f"[OPTION] 메시지 {message_count} 생성된 버튼 수: {len(buttons)}")
-                
-                # 버튼이 있을 때만 메시지 전송
-                if buttons:
-                    print(f"[OPTION] 메시지 {message_count} 전송 시작")
-                    
-                    url = f"https://graph.facebook.com/v18.0/me/messages"
-                    
-                    # Facebook Button Template 사용
-                    data = {
-                        'recipient': {'id': sender_id},
-                        'message': {
-                            'attachment': {
-                                'type': 'template',
-                                'payload': {
-                                    'template_type': 'button',
-                                    'text': f"📌 Pick your preferred option ({message_count}/{total_messages}):",
-                                    'buttons': buttons[:3]  # Facebook 제한: 최대 3개 버튼
-                                }
+                # Facebook Button Template 사용
+                data = {
+                    'recipient': {'id': sender_id},
+                    'message': {
+                        'attachment': {
+                            'type': 'template',
+                            'payload': {
+                                'template_type': 'button',
+                                'text': f"📌 Pick your preferred option ({message_count}/{total_messages}):",
+                                'buttons': buttons[:3]  # Facebook 제한: 최대 3개 버튼
                             }
-                        },
-                        'access_token': PAGE_ACCESS_TOKEN,
-                        'messaging_type': 'RESPONSE'
-                    }
-                    
-                    headers = {'Content-Type': 'application/json'}
-                    
-                    try:
-                        print(f"[OPTION] HTTP 요청 전송 중... (메시지 {message_count})")
-                        response = requests.post(url, headers=headers, json=data, timeout=25)
-                        
-                        print(f"[OPTION] 메시지 {message_count} 응답 상태: {response.status_code}")
-                        
-                        if response.status_code == 200:
-                            result = response.json()
-                            message_id = result.get("message_id")
-                            print(f"[OPTION] 메시지 {message_count} 전송 성공! (ID: {message_id})")
-                            successful_messages += 1
-                            
-                            # 봇이 보낸 메시지 ID 기록
-                            if message_id:
-                                BOT_MESSAGES.add(message_id)
-                        else:
-                            print(f"[OPTION] 메시지 {message_count} 전송 실패: {response.status_code}")
-                            print(f"[OPTION] 오류 응답: {response.text}")
-                            
-                    except requests.exceptions.Timeout:
-                        print(f"[OPTION] 메시지 {message_count} 요청 타임아웃 (25초)")
-                    except Exception as e:
-                        print(f"[OPTION] 메시지 {message_count} 전송 오류: {e}")
-                    
-                    # 메시지 간 딜레이 - 항상 적용 (마지막 메시지 제외)
-                    if i + 3 < len(options):  # 마지막 메시지가 아니면
-                        print(f"[OPTION] 메시지 {message_count} 후 딜레이 시작 (3초)...")
-                        time_module.sleep(3.0)
-                        print(f"[OPTION] 메시지 {message_count} 딜레이 완료")
-                else:
-                    print(f"[OPTION] 메시지 {message_count} 건너뜀 - 버튼 없음")
+                        }
+                    },
+                    'access_token': PAGE_ACCESS_TOKEN,
+                    'messaging_type': 'RESPONSE'
+                }
                 
-                print(f"[OPTION] ===== 메시지 {message_count} 완료 =====\n")
-            
-            print(f"[OPTION] Button Template 전송 완료 - 성공: {successful_messages}/{total_messages}개 메시지")
-            
-            if successful_messages == 0:
-                print(f"[OPTION] 모든 메시지 전송 실패 - 수량 선택으로 이동")
-                send_facebook_message(sender_id, "⚠️ 옵션 처리 중 오류가 발생했습니다. 수량을 입력해주세요.")
-                time_module.sleep(1)
-                send_quantity_selection(sender_id, product_code)
-            elif successful_messages < total_messages:
-                print(f"[OPTION] 일부 메시지만 전송됨 ({successful_messages}/{total_messages})")
-                # 그래도 일부는 전송되었으므로 계속 진행
+                headers = {'Content-Type': 'application/json'}
+                
+                try:
+                    print(f"[OPTION] HTTP 요청 전송 중... (메시지 {message_count})")
+                    response = requests.post(url, headers=headers, json=data, timeout=25)
+                    
+                    print(f"[OPTION] 메시지 {message_count} 응답 상태: {response.status_code}")
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        message_id = result.get("message_id")
+                        print(f"[OPTION] 메시지 {message_count} 전송 성공! (ID: {message_id})")
+                        successful_messages += 1
+                        
+                        # 봇이 보낸 메시지 ID 기록
+                        if message_id:
+                            BOT_MESSAGES.add(message_id)
+                    else:
+                        print(f"[OPTION] 메시지 {message_count} 전송 실패: {response.status_code}")
+                        print(f"[OPTION] 오류 응답: {response.text}")
+                        
+                except requests.exceptions.Timeout:
+                    print(f"[OPTION] 메시지 {message_count} 요청 타임아웃 (25초)")
+                except Exception as e:
+                    print(f"[OPTION] 메시지 {message_count} 전송 오류: {e}")
+                
+                # 메시지 간 딜레이 - 항상 적용 (마지막 메시지 제외)
+                if i + 3 < len(options):  # 마지막 메시지가 아니면
+                    print(f"[OPTION] 메시지 {message_count} 후 딜레이 시작 (3초)...")
+                    time_module.sleep(3.0)
+                    print(f"[OPTION] 메시지 {message_count} 딜레이 완료")
             else:
-                print(f"[OPTION] 모든 옵션 메시지 전송 완료!")
+                print(f"[OPTION] 메시지 {message_count} 건너뜀 - 버튼 없음")
+            
+            print(f"[OPTION] ===== 메시지 {message_count} 완료 =====\n")
+        
+        print(f"[OPTION] Button Template 전송 완료 - 성공: {successful_messages}/{total_messages}개 메시지")
+        
+        if successful_messages == 0:
+            print(f"[OPTION] 모든 메시지 전송 실패 - 수량 선택으로 이동")
+            send_facebook_message(sender_id, "⚠️ 옵션 처리 중 오류가 발생했습니다. 수량을 입력해주세요.")
+            time_module.sleep(1)
+            send_quantity_selection(sender_id, product_code)
+        elif successful_messages < total_messages:
+            print(f"[OPTION] 일부 메시지만 전송됨 ({successful_messages}/{total_messages})")
+            # 그래도 일부는 전송되었으므로 계속 진행
+        else:
+            print(f"[OPTION] 모든 옵션 메시지 전송 완료!")
             
     except Exception as e:
         print(f"[OPTION] 옵션 파싱 오류: {e}")
