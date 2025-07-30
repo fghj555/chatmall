@@ -15,6 +15,7 @@ import gspread
 from google.oauth2 import service_account
 import gspread
 from datetime import datetime
+import pytz
 import numpy as np
 import pandas as pd
 import redis
@@ -102,6 +103,11 @@ connections.connect(
     port="19530"
 )
 print("✅ Milvus에 연결되었습니다.")
+
+# 한국 시간대 설정
+korea_timezone = pytz.timezone('Asia/Seoul')
+# 현재 시간을 한국 시간대로 가져
+current_time_kst = datetime.now(korea_timezone)
 
 # 컬렉션 이름
 collection_name = "ownerclan_weekly_0428"
@@ -333,7 +339,7 @@ class ConversationLogger:
             
             # 메시지 데이터 구성
             message_data = {
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": current_time_kst.strftime("%Y-%m-%d %H:%M:%S"),
                 "type": message_type,  # 'user' 또는 'bot'
                 "message": content
             }
@@ -440,7 +446,7 @@ def send_order_to_sheets(sender_id: str) -> bool:
         user_data = UserDataManager.get_user_data(sender_id)
         
         # 현재 시간
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        current_time = current_time_kst.strftime("%Y-%m-%d %H:%M:%S")
         
         # 헤더 가져오기
         headers = sheet.row_values(1)  # 첫 번째 행(헤더)만 가져오기
@@ -2327,7 +2333,7 @@ Please give us a moment while our ChatMall team confirms your payment. ⏳💳""
     
     # 주문 상세 정보 생성
     order_data = OrderDataManager.get_order_data(sender_id)
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    current_time = current_time_kst.strftime("%Y-%m-%d %H:%M:%S")
     
     order_summary = f"""✅ Order Completed Successfully! 🎉
 
@@ -3218,7 +3224,7 @@ async def send_order_to_sheets_unified(session_id: str, session_data: dict) -> b
             return False
         
         # 현재 시간
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        current_time = current_time_kst.strftime("%Y-%m-%d %H:%M:%S")
         
         # 헤더 가져오기
         headers = sheet.row_values(1)
@@ -3821,7 +3827,7 @@ async def handle_chatmall_complete_with_triggers(data: ExtendedChatmallRequest, 
             if sheet_success:
                 WebOrderManager.update_session_data(session_id, step="completed")
                 order_number = f"CHATMALL{int(time.time())}"
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                timestamp = current_time_kst.strftime("%Y-%m-%d %H:%M:%S")
                 
                 # Facebook 챗봇 스타일 주문 완료 메시지
                 completion_message = (
@@ -4114,7 +4120,7 @@ async def view_conversations_web():
                         <div class="stat-label">총 메시지</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number">{datetime.now().strftime('%H:%M')}</div>
+                        <div class="stat-number">{{ current_time_display }}</div>
                         <div class="stat-label">마지막 업데이트</div>
                     </div>
                 </div>
@@ -4221,7 +4227,7 @@ async def get_conversations_json():
             "data": conversations,
             "total_users": len(conversations),
             "total_messages": sum(len(msgs) for msgs in conversations.values()),
-            "last_updated": datetime.now().isoformat()
+            "last_updated": current_time_kst.isoformat()
         })
         
     except Exception as e:
@@ -4244,7 +4250,7 @@ async def download_conversations():
                 content=content,
                 media_type="application/json",
                 headers={
-                    "Content-Disposition": f"attachment; filename=facebook_conversations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                    "Content-Disposition": f"attachment; filename=facebook_conversations_{current_time_kst.strftime('%Y%m%d_%H%M%S')}.json"
                 }
             )
         else:
