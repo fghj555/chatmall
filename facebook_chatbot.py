@@ -881,7 +881,6 @@ def send_welcome_message(sender_id: str):
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print(f"환영 버튼 카드 전송 성공")
-            ConversationLogger.log_bot_message(sender_id, json.dumps(data, ensure_ascii=False, indent=2))
             # AI 검색 버튼을 별도 메시지로 전송
             time_module.sleep(1)
             send_ai_search_button(sender_id)
@@ -928,7 +927,6 @@ def send_ai_search_button(sender_id: str):
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print(f"AI 검색 Quick Reply 버튼 전송 성공")
-            ConversationLogger.log_bot_message(sender_id, json.dumps(data, ensure_ascii=False, indent=2))
         else:
             print(f"AI 검색 Quick Reply 버튼 전송 실패: {response.status_code} - {response.text}")
     except Exception as e:
@@ -1017,7 +1015,6 @@ def send_navigation_buttons(sender_id: str):
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print(f"네비게이션 카드 메시지 전송 성공")
-            ConversationLogger.log_bot_message(sender_id, json.dumps(data, ensure_ascii=False, indent=2))
         else:
             print(f"네비게이션 카드 메시지 전송 실패: {response.status_code} - {response.text}")
     except Exception as e:
@@ -1075,7 +1072,6 @@ def send_go_home_card(sender_id: str):
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print(f"Go Home 카드 메시지 전송 성공")
-            ConversationLogger.log_bot_message(sender_id, json.dumps(data, ensure_ascii=False, indent=2))
         else:
             print(f"Go Home 카드 메시지 전송 실패: {response.status_code} - {response.text}")
     except Exception as e:
@@ -1372,7 +1368,6 @@ def send_order_confirmation(sender_id: str, product_code: str, quantity: int):
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print(f"주문 확인 카드 전송 성공")
-            ConversationLogger.log_bot_message(sender_id, json.dumps(data, ensure_ascii=False, indent=2))
         else:
             print(f"주문 확인 카드 전송 실패: {response.status_code} - {response.text}")
     except Exception as e:
@@ -1534,7 +1529,6 @@ def send_option_selection_buttons(sender_id: str, product_code: str):
                         result = response.json()
                         message_id = result.get("message_id")
                         print(f"[OPTION] 메시지 {message_count} 전송 성공! (ID: {message_id})")
-                        ConversationLogger.log_bot_message(sender_id, json.dumps(data, ensure_ascii=False, indent=2))
                         successful_messages += 1
                         
                         # 봇이 보낸 메시지 ID 기록
@@ -2148,7 +2142,6 @@ def send_order_confirmation_review(sender_id: str):
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print(f"✅ 주문 확인 카드 전송 성공")
-            ConversationLogger.log_bot_message(sender_id, json.dumps(data, ensure_ascii=False, indent=2))
             OrderDataManager.update_order_data(sender_id, order_status="review_confirmation")
         else:
             print(f"❌ 주문 확인 카드 전송 실패: {response.status_code}")
@@ -2228,7 +2221,6 @@ def send_correction_options(sender_id: str):
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print(f"✅ 수정 옵션 카드 전송 성공")
-            ConversationLogger.log_bot_message(sender_id, json.dumps(data, ensure_ascii=False, indent=2))
         else:
             print(f"❌ 수정 옵션 카드 전송 실패: {response.status_code}")
     except Exception as e:
@@ -2287,7 +2279,6 @@ After sending the payment, please click the "PAYMENT SENT" button so we can proc
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print(f"✅ 결제 확인 버튼 전송 성공")
-            ConversationLogger.log_bot_message(sender_id, json.dumps(data, ensure_ascii=False, indent=2))
             OrderDataManager.update_order_data(sender_id, order_status="waiting_payment")
         else:
             print(f"❌ 결제 확인 버튼 전송 실패: {response.status_code}")
