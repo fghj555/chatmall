@@ -303,7 +303,7 @@ class ConversationLogger:
             print(f"대화 기록 로드 오류: {e}")
             return {}
 
-@staticmethod
+    @staticmethod
     def save_conversations(data: dict) -> bool:
         """대화 기록 저장"""
         try:
