@@ -386,7 +386,12 @@ class ConversationLogger:
     def log_bot_message(sender_id: str, bot_message: str) -> bool:
         """봇 메시지 로그"""
         return ConversationLogger.log_message(sender_id, "bot", bot_message)
-
+        
+    @staticmethod
+    def log_admin_message(sender_id: str, admin_message: str) -> bool:
+        """관리자 메시지 로그"""
+        return ConversationLogger.log_message(sender_id, "admin", admin_message)
+        
 def init_google_sheets():
     """Google Sheets 연결 초기화 (환경변수 + Fallback)"""
     try:
@@ -4058,7 +4063,7 @@ async def handle_chatmall_reset_with_triggers(data: ExtendedChatmallRequest, ses
 # 테스트
 @app.get("/view-conversations", response_class=HTMLResponse)
 async def view_conversations_web():
-    """웹 브라우저에서 대화 기록을 예쁘게 볼 수 있는 페이지"""
+    """웹 브라우저에서 대화 기록을 예쁘게 볼 수 있는 페이지 (메시지 송신 기능 포함)"""
     try:
         # JSON 파일 읽기
         if os.path.exists(CONVERSATION_DATA_FILE):
@@ -4074,7 +4079,7 @@ async def view_conversations_web():
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Facebook 대화 기록</title>
+            <title>Facebook 대화 기록 관리</title>
             <style>
                 body {
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -4106,9 +4111,28 @@ async def view_conversations_web():
                     padding: 15px 20px;
                     font-weight: bold;
                     cursor: pointer;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
                 }
                 .user-header:hover {
                     background: #166fe5;
+                }
+                .user-info {
+                    flex: 1;
+                }
+                .send-message-btn {
+                    background: #42b883;
+                    border: none;
+                    color: white;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 12px;
+                    margin-left: 10px;
+                }
+                .send-message-btn:hover {
+                    background: #369870;
                 }
                 .messages {
                     max-height: 400px;
@@ -4132,6 +4156,10 @@ async def view_conversations_web():
                 .message.bot {
                     background: #e3f2fd;
                 }
+                .message.admin {
+                    background: #fff3cd;
+                    border-left: 4px solid #ffc107;
+                }
                 .message-type {
                     font-weight: bold;
                     min-width: 40px;
@@ -4139,6 +4167,7 @@ async def view_conversations_web():
                 }
                 .user-type { color: #1877f2; }
                 .bot-type { color: #4caf50; }
+                .admin-type { color: #f57c00; }
                 .message-content {
                     flex: 1;
                     word-break: break-word;
@@ -4179,6 +4208,7 @@ async def view_conversations_web():
                     border-radius: 5px;
                     cursor: pointer;
                     font-size: 14px;
+                    margin-right: 10px;
                 }
                 .refresh-btn:hover {
                     background: #166fe5;
@@ -4191,13 +4221,127 @@ async def view_conversations_web():
                     margin-bottom: 20px;
                     font-size: 14px;
                 }
+                
+                /* 모달 스타일 */
+                .modal {
+                    display: none;
+                    position: fixed;
+                    z-index: 1000;
+                    left: 0;
+                    top: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: rgba(0,0,0,0.5);
+                }
+                .modal-content {
+                    background-color: white;
+                    margin: 10% auto;
+                    padding: 20px;
+                    border-radius: 8px;
+                    width: 80%;
+                    max-width: 500px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                }
+                .modal-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    border-bottom: 1px solid #eee;
+                    padding-bottom: 10px;
+                }
+                .modal-title {
+                    font-size: 18px;
+                    font-weight: bold;
+                    color: #333;
+                }
+                .close {
+                    color: #aaa;
+                    font-size: 28px;
+                    font-weight: bold;
+                    cursor: pointer;
+                }
+                .close:hover {
+                    color: black;
+                }
+                .form-group {
+                    margin-bottom: 15px;
+                }
+                .form-label {
+                    display: block;
+                    margin-bottom: 5px;
+                    font-weight: bold;
+                    color: #333;
+                }
+                .form-input {
+                    width: 100%;
+                    padding: 10px;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    font-size: 14px;
+                    box-sizing: border-box;
+                }
+                .form-textarea {
+                    width: 100%;
+                    padding: 10px;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    font-size: 14px;
+                    min-height: 100px;
+                    resize: vertical;
+                    box-sizing: border-box;
+                }
+                .btn-primary {
+                    background: #1877f2;
+                    color: white;
+                    border: none;
+                    padding: 12px 20px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    width: 100%;
+                }
+                .btn-primary:hover {
+                    background: #166fe5;
+                }
+                .btn-primary:disabled {
+                    background: #ccc;
+                    cursor: not-allowed;
+                }
+                
+                /* 알림 스타일 */
+                .alert {
+                    padding: 10px 15px;
+                    margin-bottom: 15px;
+                    border-radius: 4px;
+                    display: none;
+                }
+                .alert-success {
+                    background-color: #d4edda;
+                    color: #155724;
+                    border: 1px solid #c3e6cb;
+                }
+                .alert-error {
+                    background-color: #f8d7da;
+                    color: #721c24;
+                    border: 1px solid #f5c6cb;
+                }
+                
+                /* 로딩 상태 */
+                .loading {
+                    opacity: 0.6;
+                    pointer-events: none;
+                }
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>📱 Facebook 대화 기록</h1>
-                    <button class="refresh-btn" onclick="location.reload()">🔄 새로고침</button>
+                    <h1>📱 Facebook 대화 기록 관리</h1>
+                    <div>
+                        <button class="refresh-btn" onclick="location.reload()">🔄 새로고침</button>
+                        <button class="refresh-btn" onclick="openBroadcastModal()" style="background: #42b883;">📢 전체 메시지</button>
+                    </div>
                     <br><br>
                     <input type="text" class="search-box" id="searchBox" placeholder="사용자 ID 또는 메시지 내용으로 검색..." onkeyup="searchMessages()">
                 </div>
@@ -4230,12 +4374,21 @@ async def view_conversations_web():
             message_count = len(messages)
             last_message = messages[-1]['timestamp'] if messages else "없음"
             
+            # 사용자 ID에서 실제 ID 추출 (ID:12345, name:홍길동 형태에서 12345만 추출)
+            actual_id = sender_id.split(',')[0].replace('ID:', '').strip()
+            user_display_name = sender_id.split('name:')[1].strip() if 'name:' in sender_id else actual_id
+            
             html_content += f"""
                 <div class="user-card">
-                    <div class="user-header" onclick="toggleMessages('{sender_id}')">
-                        👤 사용자: {sender_id} | 메시지: {message_count}개 | 최근: {last_message}
+                    <div class="user-header" onclick="toggleMessages('{actual_id}')">
+                        <div class="user-info">
+                            👤 {user_display_name} (ID: {actual_id}) | 메시지: {message_count}개 | 최근: {last_message}
+                        </div>
+                        <button class="send-message-btn" onclick="openMessageModal('{actual_id}', '{user_display_name}'); event.stopPropagation();">
+                            💬 메시지 보내기
+                        </button>
                     </div>
-                    <div class="messages" id="messages-{sender_id}">
+                    <div class="messages" id="messages-{actual_id}">
             """
             
             # 메시지들
@@ -4244,10 +4397,22 @@ async def view_conversations_web():
                 content = msg['message']
                 timestamp = msg['timestamp']
                 
-                # 🔥 수정: 'bot'이 아니면 사용자로 처리
-                type_class = 'bot' if msg_type == 'bot' else 'user'
-                type_label = '🤖' if msg_type == 'bot' else '👤'
-                type_color = 'bot-type' if msg_type == 'bot' else 'user-type'
+                # 메시지 타입에 따른 스타일 결정
+                if msg_type == 'admin':
+                    type_class = 'admin'
+                    type_label = '👨‍💼'
+                    type_color = 'admin-type'
+                elif msg_type in ['user', 'postback'] or msg_type == user_display_name:
+                    type_class = 'user'
+                    type_label = '👤'
+                    type_color = 'user-type'
+                else:
+                    type_class = 'bot'
+                    type_label = '🤖'
+                    type_color = 'bot-type'
+                
+                # HTML 이스케이프 처리
+                content = content.replace('<', '&lt;').replace('>', '&gt;').replace('&', '&amp;').replace('\n', '<br>')
                 
                 html_content += f"""
                         <div class="message {type_class}">
@@ -4267,7 +4432,64 @@ async def view_conversations_web():
         html_content += """
             </div>
             
+            <!-- 메시지 송신 모달 -->
+            <div id="messageModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div class="modal-title">메시지 보내기</div>
+                        <span class="close" onclick="closeMessageModal()">&times;</span>
+                    </div>
+                    
+                    <div id="alertContainer"></div>
+                    
+                    <form id="messageForm" onsubmit="sendMessage(event)">
+                        <div class="form-group">
+                            <label class="form-label">받는 사람:</label>
+                            <input type="text" id="recipientInfo" class="form-input" readonly>
+                            <input type="hidden" id="recipientId">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">메시지 내용:</label>
+                            <textarea id="messageContent" class="form-textarea" placeholder="전송할 메시지를 입력하세요..." required></textarea>
+                        </div>
+                        
+                        <button type="submit" class="btn-primary" id="sendBtn">
+                            📤 메시지 전송
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- 전체 메시지 모달 -->
+            <div id="broadcastModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div class="modal-title">📢 전체 사용자에게 메시지 보내기</div>
+                        <span class="close" onclick="closeBroadcastModal()">&times;</span>
+                    </div>
+                    
+                    <div id="broadcastAlertContainer"></div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">대상 사용자 수: <span id="userCount">{total_users}</span>명</label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">메시지 내용:</label>
+                        <textarea id="broadcastContent" class="form-textarea" placeholder="모든 사용자에게 전송할 메시지를 입력하세요..." required></textarea>
+                    </div>
+                    
+                    <button onclick="sendBroadcast()" class="btn-primary" id="broadcastBtn" style="background: #dc3545;">
+                        📢 전체 전송 (주의: 모든 사용자에게 전송됩니다!)
+                    </button>
+                </div>
+            </div>
+            
             <script>
+                let currentRecipientId = '';
+                let currentRecipientName = '';
+                
                 function toggleMessages(userId) {
                     const messages = document.getElementById('messages-' + userId);
                     if (messages.style.display === 'none' || messages.style.display === '') {
@@ -4296,6 +4518,203 @@ async def view_conversations_web():
                         
                         card.style.display = hasMatch ? 'block' : 'none';
                     });
+                }
+                
+                function openMessageModal(recipientId, recipientName) {
+                    currentRecipientId = recipientId;
+                    currentRecipientName = recipientName;
+                    
+                    document.getElementById('recipientId').value = recipientId;
+                    document.getElementById('recipientInfo').value = `${recipientName} (ID: ${recipientId})`;
+                    document.getElementById('messageContent').value = '';
+                    document.getElementById('messageModal').style.display = 'block';
+                    
+                    // 알림 초기화
+                    document.getElementById('alertContainer').innerHTML = '';
+                }
+                
+                function closeMessageModal() {
+                    document.getElementById('messageModal').style.display = 'none';
+                }
+                
+                function openBroadcastModal() {
+                    document.getElementById('broadcastContent').value = '';
+                    document.getElementById('broadcastModal').style.display = 'block';
+                    document.getElementById('broadcastAlertContainer').innerHTML = '';
+                }
+                
+                function closeBroadcastModal() {
+                    document.getElementById('broadcastModal').style.display = 'none';
+                }
+                
+                function showAlert(containerId, message, type) {
+                    const alertHtml = `
+                        <div class="alert alert-${type}">
+                            ${message}
+                        </div>
+                    `;
+                    document.getElementById(containerId).innerHTML = alertHtml;
+                    
+                    // 3초 후 알림 자동 제거
+                    setTimeout(() => {
+                        const alertElement = document.querySelector(`#${containerId} .alert`);
+                        if (alertElement) {
+                            alertElement.style.display = 'none';
+                        }
+                    }, 3000);
+                }
+                
+                async function sendMessage(event) {
+                    event.preventDefault();
+                    
+                    const recipientId = document.getElementById('recipientId').value;
+                    const messageContent = document.getElementById('messageContent').value.trim();
+                    const sendBtn = document.getElementById('sendBtn');
+                    
+                    if (!messageContent) {
+                        showAlert('alertContainer', '메시지 내용을 입력해주세요.', 'error');
+                        return;
+                    }
+                    
+                    // 로딩 상태
+                    sendBtn.disabled = true;
+                    sendBtn.textContent = '전송 중...';
+                    document.querySelector('.modal-content').classList.add('loading');
+                    
+                    try {
+                        const response = await fetch('/send-message', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                recipient_id: recipientId,
+                                message: messageContent
+                            })
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (result.status === 'success') {
+                            showAlert('alertContainer', `✅ 메시지가 성공적으로 전송되었습니다!`, 'success');
+                            document.getElementById('messageContent').value = '';
+                            
+                            // 2초 후 모달 닫기
+                            setTimeout(() => {
+                                closeMessageModal();
+                                location.reload(); // 페이지 새로고침하여 새 메시지 표시
+                            }, 2000);
+                        } else {
+                            showAlert('alertContainer', `❌ 전송 실패: ${result.error}`, 'error');
+                        }
+                    } catch (error) {
+                        showAlert('alertContainer', `❌ 네트워크 오류: ${error.message}`, 'error');
+                    } finally {
+                        // 로딩 상태 해제
+                        sendBtn.disabled = false;
+                        sendBtn.textContent = '📤 메시지 전송';
+                        document.querySelector('.modal-content').classList.remove('loading');
+                    }
+                }
+                
+                async function sendBroadcast() {
+                    const broadcastContent = document.getElementById('broadcastContent').value.trim();
+                    const broadcastBtn = document.getElementById('broadcastBtn');
+                    const userCount = {total_users};
+                    
+                    if (!broadcastContent) {
+                        showAlert('broadcastAlertContainer', '메시지 내용을 입력해주세요.', 'error');
+                        return;
+                    }
+                    
+                    if (!confirm(`정말로 ${userCount}명의 모든 사용자에게 메시지를 전송하시겠습니까?`)) {
+                        return;
+                    }
+                    
+                    // 로딩 상태
+                    broadcastBtn.disabled = true;
+                    broadcastBtn.textContent = '전송 중...';
+                    
+                    try {
+                        // 모든 사용자 ID 수집
+                        const userIds = {list(conversations.keys())};
+                        let successCount = 0;
+                        let failCount = 0;
+                        
+                        showAlert('broadcastAlertContainer', `📤 ${userCount}명에게 메시지 전송 시작...`, 'success');
+                        
+                        // 순차적으로 전송 (API 제한 고려)
+                        for (let i = 0; i < userIds.length; i++) {
+                            const fullUserId = userIds[i];
+                            // ID:12345, name:홍길동 형태에서 실제 ID만 추출
+                            const actualId = fullUserId.split(',')[0].replace('ID:', '').strip();
+                            
+                            try {
+                                const response = await fetch('/send-message', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                        recipient_id: actualId,
+                                        message: broadcastContent
+                                    })
+                                });
+                                
+                                if (response.ok) {
+                                    successCount++;
+                                } else {
+                                    failCount++;
+                                }
+                                
+                                // 진행 상황 업데이트
+                                broadcastBtn.textContent = `전송 중... (${i + 1}/${userCount})`;
+                                
+                                // API 제한을 고려한 지연
+                                if (i < userIds.length - 1) {
+                                    await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
+                                }
+                                
+                            } catch (error) {
+                                failCount++;
+                                console.error(`전송 실패 (${actualId}):`, error);
+                            }
+                        }
+                        
+                        // 결과 표시
+                        if (successCount > 0) {
+                            showAlert('broadcastAlertContainer', 
+                                `✅ 전송 완료! 성공: ${successCount}명, 실패: ${failCount}명`, 
+                                'success');
+                            
+                            // 3초 후 모달 닫기
+                            setTimeout(() => {
+                                closeBroadcastModal();
+                                location.reload();
+                            }, 3000);
+                        } else {
+                            showAlert('broadcastAlertContainer', '❌ 모든 메시지 전송에 실패했습니다.', 'error');
+                        }
+                        
+                    } catch (error) {
+                        showAlert('broadcastAlertContainer', `❌ 전체 전송 오류: ${error.message}`, 'error');
+                    } finally {
+                        broadcastBtn.disabled = false;
+                        broadcastBtn.textContent = '📢 전체 전송 (주의: 모든 사용자에게 전송됩니다!)';
+                    }
+                }
+                
+                // 모달 외부 클릭 시 닫기
+                window.onclick = function(event) {
+                    const messageModal = document.getElementById('messageModal');
+                    const broadcastModal = document.getElementById('broadcastModal');
+                    
+                    if (event.target === messageModal) {
+                        closeMessageModal();
+                    }
+                    if (event.target === broadcastModal) {
+                        closeBroadcastModal();
+                    }
                 }
                 
                 // 5분마다 자동 새로고침
@@ -4479,6 +4898,199 @@ async def get_file_info():
             content={"error": str(e)}
         )
 
+# 메세지 보내기 테스트
+class SendMessageRequest(BaseModel):
+    recipient_id: str
+    message: str
+
+@app.post("/send-message")
+async def send_message_to_user(request: SendMessageRequest):
+    """관리자가 특정 사용자에게 메시지 직접 송신"""
+    try:
+        if not request.recipient_id or not request.message:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "error": "recipient_id와 message가 필요합니다"}
+            )
+        
+        print(f"[ADMIN_SEND] 관리자 메시지 송신: {request.recipient_id} -> {request.message}")
+        
+        # Facebook API를 사용해 메시지 송신
+        url = f"https://graph.facebook.com/v21.0/me/messages"
+        
+        headers = {
+            'Authorization': f'Bearer {PAGE_ACCESS_TOKEN}',
+            'Content-Type': 'application/json'
+        }
+        
+        data = {
+            "message": {"text": request.message},
+            "recipient": {"id": request.recipient_id}
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=10)
+        
+        if response.status_code == 200:
+            result = response.json()
+            message_id = result.get("message_id")
+            
+            print(f"✅ [ADMIN_SEND] 메시지 송신 성공: {message_id}")
+            
+            # 봇 메시지로 대화 기록에 저장
+            ConversationLogger.log_message(request.recipient_id, "admin", f"[관리자] {request.message}")
+            
+            # 봇이 보낸 메시지 ID 기록
+            if message_id:
+                BOT_MESSAGES.add(message_id)
+            
+            return JSONResponse(content={
+                "status": "success",
+                "message": "메시지가 성공적으로 전송되었습니다",
+                "message_id": message_id,
+                "recipient_id": request.recipient_id,
+                "sent_message": request.message
+            })
+        else:
+            error_text = response.text
+            print(f"❌ [ADMIN_SEND] 메시지 송신 실패: {response.status_code} - {error_text}")
+            
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "error",
+                    "error": f"Facebook API 오류: {response.status_code}",
+                    "details": error_text
+                }
+            )
+        
+    except requests.exceptions.Timeout:
+        print(f"❌ [ADMIN_SEND] 메시지 송신 타임아웃")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "error": "메시지 송신 타임아웃"}
+        )
+    except Exception as e:
+        print(f"❌ [ADMIN_SEND] 메시지 송신 오류: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "error": str(e)}
+        )
+        
+@app.post("/broadcast-message")
+async def broadcast_message_to_all_users(request: SendMessageRequest):
+    """관리자가 모든 사용자에게 메시지 브로드캐스트"""
+    try:
+        if not request.message:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "error": "message가 필요합니다"}
+            )
+        
+        print(f"[ADMIN_BROADCAST] 전체 메시지 브로드캐스트 시작: {request.message}")
+        
+        # 모든 사용자 ID 가져오기
+        if os.path.exists(CONVERSATION_DATA_FILE):
+            with open(CONVERSATION_DATA_FILE, 'r', encoding='utf-8') as f:
+                conversations = json.load(f)
+        else:
+            conversations = {}
+        
+        if not conversations:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "error": "전송할 사용자가 없습니다"}
+            )
+        
+        success_count = 0
+        fail_count = 0
+        results = []
+        
+        # Facebook API 설정
+        url = f"https://graph.facebook.com/v21.0/me/messages"
+        headers = {
+            'Authorization': f'Bearer {PAGE_ACCESS_TOKEN}',
+            'Content-Type': 'application/json'
+        }
+        
+        # 각 사용자에게 순차적으로 메시지 전송
+        for sender_key in conversations.keys():
+            try:
+                # 사용자 ID 추출 (ID:12345, name:홍길동 형태에서 실제 ID만 추출)
+                if 'ID:' in sender_key:
+                    actual_id = sender_key.split(',')[0].replace('ID:', '').strip()
+                else:
+                    actual_id = sender_key.strip()
+                
+                print(f"[BROADCAST] 전송 중: {actual_id}")
+                
+                data = {
+                    "message": {"text": request.message},
+                    "recipient": {"id": actual_id}
+                }
+                
+                response = requests.post(url, headers=headers, json=data, timeout=10)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    message_id = result.get("message_id")
+                    success_count += 1
+                    
+                    # 대화 기록에 저장
+                    ConversationLogger.log_admin_message(actual_id, f"[전체공지] {request.message}")
+                    
+                    # 봇이 보낸 메시지 ID 기록
+                    if message_id:
+                        BOT_MESSAGES.add(message_id)
+                    
+                    results.append({
+                        "user_id": actual_id,
+                        "status": "success",
+                        "message_id": message_id
+                    })
+                    
+                    print(f"✅ [BROADCAST] 전송 성공: {actual_id} -> {message_id}")
+                else:
+                    fail_count += 1
+                    error_text = response.text
+                    results.append({
+                        "user_id": actual_id,
+                        "status": "failed",
+                        "error": f"{response.status_code}: {error_text}"
+                    })
+                    
+                    print(f"❌ [BROADCAST] 전송 실패: {actual_id} -> {response.status_code}")
+                
+                # API 제한을 고려한 지연 (1초)
+                import time
+                time.sleep(1)
+                
+            except Exception as e:
+                fail_count += 1
+                results.append({
+                    "user_id": actual_id if 'actual_id' in locals() else sender_key,
+                    "status": "error",
+                    "error": str(e)
+                })
+                print(f"❌ [BROADCAST] 오류: {sender_key} -> {e}")
+        
+        print(f"🎯 [BROADCAST] 전체 전송 완료 - 성공: {success_count}, 실패: {fail_count}")
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"브로드캐스트 완료: 성공 {success_count}명, 실패 {fail_count}명",
+            "success_count": success_count,
+            "fail_count": fail_count,
+            "total_users": len(conversations),
+            "sent_message": request.message,
+            "details": results
+        })
+        
+    except Exception as e:
+        print(f"❌ [ADMIN_BROADCAST] 브로드캐스트 오류: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "error": str(e)}
+        )
 
 # FastAPI 서버 실행
 if __name__ == "__main__":
