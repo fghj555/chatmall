@@ -317,39 +317,54 @@ class ConversationLogger:
         except Exception as e:
             print(f"대화 기록 저장 오류: {e}")
             return False
+            
+    @staticmethod
+    def get_user_name_from_facebook(sender_id: str) -> str:
+        """Facebook에서 사용자 실제 이름 가져오기"""
+        try:
+            user_name = get_user_name(sender_id)  # 기존 함수 사용
+            return user_name if user_name else "Unknown User"
+        except Exception as e:
+            print(f"사용자 이름 가져오기 오류: {e}")
+            return "Unknown User"
     
     @staticmethod
     def log_message(sender_id: str, message_type: str, content: str) -> bool:
         """
         개별 메시지 로그 저장
-        
-        Args:
-            sender_id: Facebook 사용자 ID
-            message_type: 'user' 또는 'bot'
-            content: 메시지 내용
         """
         try:
             conversations = ConversationLogger.load_conversations()
             
+            # 사용자 실제 이름 가져오기
+            if message_type in ['user', 'postback']:
+                user_name = ConversationLogger.get_user_name_from_facebook(sender_id)
+                display_type = user_name
+            else:
+                display_type = message_type  # 'bot' 또는 다른 타입
+            
+            # 새로운 키 형식: "ID:sender_id, name:user_name"
+            user_key = f"ID:{sender_id}, name:{ConversationLogger.get_user_name_from_facebook(sender_id)}"
+            
             # 사용자별 대화 기록 초기화
-            if sender_id not in conversations:
-                conversations[sender_id] = []
+            if user_key not in conversations:
+                conversations[user_key] = []
             
             # 메시지 데이터 구성
             message_data = {
-                "timestamp": datetime.now(korea_timezone).strftime("%Y-%m-%d %H:%M:%S"),
-                "type": message_type,  # 'user' 또는 'bot'
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "type": display_type,  # 실제 사용자 이름 또는 'bot'
                 "message": content
             }
             
             # 대화 기록에 추가
-            conversations[sender_id].append(message_data)
+            conversations[user_key].append(message_data)
             
             # JSON 파일에 저장
             success = ConversationLogger.save_conversations(conversations)
             
             if success:
-                print(f"[CONVERSATION] 메시지 저장: {sender_id} - {message_type}")
+                print(f"[CONVERSATION] 메시지 저장: {user_key} - {display_type}")
             
             return success
             
@@ -361,6 +376,11 @@ class ConversationLogger:
     def log_user_message(sender_id: str, user_message: str) -> bool:
         """사용자 메시지 로그"""
         return ConversationLogger.log_message(sender_id, "user", user_message)
+
+    @staticmethod
+    def log_postback_message(sender_id: str, postback_message: str) -> bool:
+        """Postback 메시지 로그 (실제 이름 사용)"""
+        return ConversationLogger.log_message(sender_id, "postback", postback_message)
     
     @staticmethod
     def log_bot_message(sender_id: str, bot_message: str) -> bool:
@@ -2558,7 +2578,11 @@ async def process_webhook_data(data: dict):
                     if "postback" in messaging:
                         postback = messaging["postback"]
                         payload = postback.get("payload", "")
-                        print(f"🔘 [POSTBACK] 버튼 클릭: {payload}")
+                        title = postback.get("title", "")
+                        
+                        postback_log = f"[버튼 클릭] {title}" if title else f"[버튼 클릭] {payload}"
+                        ConversationLogger.log_postback_message(sender_id, postback_log)
+                        
                         handle_postback(sender_id, payload)
                     
                     # 메시지 처리
@@ -2567,18 +2591,23 @@ async def process_webhook_data(data: dict):
                         user_message = message.get("text", "").strip()
                         message_id = message.get("mid")
                         
-                        # Echo 및 봇 메시지 필터링 강화
+                        # Echo 및 봇 메시지 필터링
                         if (message.get("is_echo") or 
                             message_id in BOT_MESSAGES or 
                             not user_message):
                             continue
+                        
                         ConversationLogger.log_user_message(sender_id, user_message)
                         
                         # 퀵 리플라이 처리
                         quick_reply = message.get("quick_reply")
                         if quick_reply:
                             payload = quick_reply.get("payload")
-                            print(f"🔘 [QUICK_REPLY] 버튼 클릭: {payload}")
+                            title = quick_reply.get("title", "")
+                            
+                            quick_reply_log = f"[퀵 리플라이] {title}" if title else f"[퀵 리플라이] {payload}"
+                            ConversationLogger.log_postback_message(sender_id, quick_reply_log)
+                            
                             handle_quick_reply(sender_id, payload)
                             continue
                         
@@ -2587,7 +2616,6 @@ async def process_webhook_data(data: dict):
                             await handle_user_message(sender_id, user_message)
                 
                 finally:
-                    # 처리 완료 후 사용자 제거
                     PROCESSING_USERS.discard(sender_id)
                     
     except Exception as e:
