@@ -4063,7 +4063,7 @@ async def handle_chatmall_reset_with_triggers(data: ExtendedChatmallRequest, ses
 # 테스트
 @app.get("/view-conversations", response_class=HTMLResponse)
 async def view_conversations_web():
-    """웹 브라우저에서 대화 기록을 예쁘게 볼 수 있는 페이지 (메시지 송신 기능 포함)"""
+    """웹 브라우저에서 대화 기록을 예쁘게 볼 수 있는 페이지 (메시지 송신 기능 포함) - 수정된 버전"""
     try:
         # JSON 파일 읽기
         if os.path.exists(CONVERSATION_DATA_FILE):
@@ -4072,8 +4072,37 @@ async def view_conversations_web():
         else:
             conversations = {}
         
+        # 사용자 ID 매핑 생성 (안전한 처리)
+        user_mappings = []
+        for idx, (sender_key, messages) in enumerate(conversations.items()):
+            # 사용자 ID 추출
+            if 'ID:' in sender_key and 'name:' in sender_key:
+                try:
+                    # ID:12345, name:홍길동 형태
+                    id_part = sender_key.split(',')[0].replace('ID:', '').strip()
+                    name_part = sender_key.split('name:')[1].strip()
+                    actual_id = id_part
+                    display_name = name_part
+                except:
+                    actual_id = sender_key
+                    display_name = sender_key
+            else:
+                # 단순 ID만 있는 경우
+                actual_id = sender_key.strip()
+                display_name = actual_id
+            
+            user_mappings.append({
+                'index': idx,
+                'original_key': sender_key,
+                'actual_id': actual_id,
+                'display_name': display_name,
+                'message_count': len(messages),
+                'last_message': messages[-1]['timestamp'] if messages else "없음",
+                'messages': messages
+            })
+        
         # HTML 생성
-        html_content = """
+        html_content = f"""
         <!DOCTYPE html>
         <html lang="ko">
         <head>
@@ -4081,31 +4110,31 @@ async def view_conversations_web():
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Facebook 대화 기록 관리</title>
             <style>
-                body {
+                body {{
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                     margin: 0;
                     padding: 20px;
                     background-color: #f5f5f5;
-                }
-                .container {
+                }}
+                .container {{
                     max-width: 1200px;
                     margin: 0 auto;
-                }
-                .header {
+                }}
+                .header {{
                     background: white;
                     padding: 20px;
                     border-radius: 8px;
                     margin-bottom: 20px;
                     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                }
-                .user-card {
+                }}
+                .user-card {{
                     background: white;
                     margin-bottom: 20px;
                     border-radius: 8px;
                     overflow: hidden;
                     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                }
-                .user-header {
+                }}
+                .user-header {{
                     background: #1877f2;
                     color: white;
                     padding: 15px 20px;
@@ -4114,14 +4143,14 @@ async def view_conversations_web():
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                }
-                .user-header:hover {
+                }}
+                .user-header:hover {{
                     background: #166fe5;
-                }
-                .user-info {
+                }}
+                .user-info {{
                     flex: 1;
-                }
-                .send-message-btn {
+                }}
+                .send-message-btn {{
                     background: #42b883;
                     border: none;
                     color: white;
@@ -4130,77 +4159,77 @@ async def view_conversations_web():
                     cursor: pointer;
                     font-size: 12px;
                     margin-left: 10px;
-                }
-                .send-message-btn:hover {
+                }}
+                .send-message-btn:hover {{
                     background: #369870;
-                }
-                .messages {
+                }}
+                .messages {{
                     max-height: 400px;
                     overflow-y: auto;
                     padding: 0;
                     display: none;
-                }
-                .message {
+                }}
+                .message {{
                     padding: 10px 20px;
                     border-bottom: 1px solid #eee;
                     display: flex;
                     align-items: flex-start;
                     gap: 10px;
-                }
-                .message:last-child {
+                }}
+                .message:last-child {{
                     border-bottom: none;
-                }
-                .message.user {
+                }}
+                .message.user {{
                     background: #f0f2f5;
-                }
-                .message.bot {
+                }}
+                .message.bot {{
                     background: #e3f2fd;
-                }
-                .message.admin {
+                }}
+                .message.admin {{
                     background: #fff3cd;
                     border-left: 4px solid #ffc107;
-                }
-                .message-type {
+                }}
+                .message-type {{
                     font-weight: bold;
                     min-width: 40px;
                     font-size: 12px;
-                }
-                .user-type { color: #1877f2; }
-                .bot-type { color: #4caf50; }
-                .admin-type { color: #f57c00; }
-                .message-content {
+                }}
+                .user-type {{ color: #1877f2; }}
+                .bot-type {{ color: #4caf50; }}
+                .admin-type {{ color: #f57c00; }}
+                .message-content {{
                     flex: 1;
                     word-break: break-word;
-                }
-                .timestamp {
+                }}
+                .timestamp {{
                     font-size: 11px;
                     color: #666;
                     margin-top: 5px;
-                }
-                .stats {
+                }}
+                .stats {{
                     display: grid;
                     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
                     gap: 15px;
                     margin-bottom: 20px;
-                }
-                .stat-card {
+                }}
+                .stat-card {{
                     background: white;
                     padding: 15px;
                     border-radius: 8px;
                     text-align: center;
                     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                }
-                .stat-number {
+                }}
+                .stat-number {{
                     font-size: 24px;
                     font-weight: bold;
                     color: #1877f2;
-                }
-                .stat-label {
+                }}
+                .stat-label {{
                     font-size: 14px;
                     color: #666;
                     margin-top: 5px;
-                }
-                .refresh-btn {
+                }}
+                .refresh-btn {{
                     background: #1877f2;
                     color: white;
                     border: none;
@@ -4209,21 +4238,21 @@ async def view_conversations_web():
                     cursor: pointer;
                     font-size: 14px;
                     margin-right: 10px;
-                }
-                .refresh-btn:hover {
+                }}
+                .refresh-btn:hover {{
                     background: #166fe5;
-                }
-                .search-box {
+                }}
+                .search-box {{
                     width: 100%;
                     padding: 10px;
                     border: 1px solid #ddd;
                     border-radius: 5px;
                     margin-bottom: 20px;
                     font-size: 14px;
-                }
+                }}
                 
                 /* 모달 스타일 */
-                .modal {
+                .modal {{
                     display: none;
                     position: fixed;
                     z-index: 1000;
@@ -4232,8 +4261,8 @@ async def view_conversations_web():
                     width: 100%;
                     height: 100%;
                     background-color: rgba(0,0,0,0.5);
-                }
-                .modal-content {
+                }}
+                .modal-content {{
                     background-color: white;
                     margin: 10% auto;
                     padding: 20px;
@@ -4241,47 +4270,47 @@ async def view_conversations_web():
                     width: 80%;
                     max-width: 500px;
                     box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-                }
-                .modal-header {
+                }}
+                .modal-header {{
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
                     margin-bottom: 20px;
                     border-bottom: 1px solid #eee;
                     padding-bottom: 10px;
-                }
-                .modal-title {
+                }}
+                .modal-title {{
                     font-size: 18px;
                     font-weight: bold;
                     color: #333;
-                }
-                .close {
+                }}
+                .close {{
                     color: #aaa;
                     font-size: 28px;
                     font-weight: bold;
                     cursor: pointer;
-                }
-                .close:hover {
+                }}
+                .close:hover {{
                     color: black;
-                }
-                .form-group {
+                }}
+                .form-group {{
                     margin-bottom: 15px;
-                }
-                .form-label {
+                }}
+                .form-label {{
                     display: block;
                     margin-bottom: 5px;
                     font-weight: bold;
                     color: #333;
-                }
-                .form-input {
+                }}
+                .form-input {{
                     width: 100%;
                     padding: 10px;
                     border: 1px solid #ddd;
                     border-radius: 4px;
                     font-size: 14px;
                     box-sizing: border-box;
-                }
-                .form-textarea {
+                }}
+                .form-textarea {{
                     width: 100%;
                     padding: 10px;
                     border: 1px solid #ddd;
@@ -4290,8 +4319,8 @@ async def view_conversations_web():
                     min-height: 100px;
                     resize: vertical;
                     box-sizing: border-box;
-                }
-                .btn-primary {
+                }}
+                .btn-primary {{
                     background: #1877f2;
                     color: white;
                     border: none;
@@ -4300,38 +4329,38 @@ async def view_conversations_web():
                     cursor: pointer;
                     font-size: 14px;
                     width: 100%;
-                }
-                .btn-primary:hover {
+                }}
+                .btn-primary:hover {{
                     background: #166fe5;
-                }
-                .btn-primary:disabled {
+                }}
+                .btn-primary:disabled {{
                     background: #ccc;
                     cursor: not-allowed;
-                }
+                }}
                 
                 /* 알림 스타일 */
-                .alert {
+                .alert {{
                     padding: 10px 15px;
                     margin-bottom: 15px;
                     border-radius: 4px;
                     display: none;
-                }
-                .alert-success {
+                }}
+                .alert-success {{
                     background-color: #d4edda;
                     color: #155724;
                     border: 1px solid #c3e6cb;
-                }
-                .alert-error {
+                }}
+                .alert-error {{
                     background-color: #f8d7da;
                     color: #721c24;
                     border: 1px solid #f5c6cb;
-                }
+                }}
                 
                 /* 로딩 상태 */
-                .loading {
+                .loading {{
                     opacity: 0.6;
                     pointer-events: none;
-                }
+                }}
             </style>
         </head>
         <body>
@@ -4347,19 +4376,12 @@ async def view_conversations_web():
                 </div>
                 
                 <div class="stats">
-        """
-        
-        # 통계 계산
-        total_users = len(conversations)
-        total_messages = sum(len(msgs) for msgs in conversations.values())
-        
-        html_content += f"""
                     <div class="stat-card">
-                        <div class="stat-number">{total_users}</div>
+                        <div class="stat-number">{len(conversations)}</div>
                         <div class="stat-label">총 사용자</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number">{total_messages}</div>
+                        <div class="stat-number">{sum(len(msgs) for msgs in conversations.values())}</div>
                         <div class="stat-label">총 메시지</div>
                     </div>
                     <div class="stat-card">
@@ -4369,29 +4391,29 @@ async def view_conversations_web():
                 </div>
         """
         
-        # 사용자별 대화 기록
-        for sender_id, messages in conversations.items():
-            message_count = len(messages)
-            last_message = messages[-1]['timestamp'] if messages else "없음"
-            
-            # 사용자 ID에서 실제 ID 추출 (ID:12345, name:홍길동 형태에서 12345만 추출)
-            actual_id = sender_id.split(',')[0].replace('ID:', '').strip()
-            user_display_name = sender_id.split('name:')[1].strip() if 'name:' in sender_id else actual_id
+        # 사용자별 대화 기록 생성
+        for user_info in user_mappings:
+            user_index = user_info['index']
+            actual_id = user_info['actual_id']
+            display_name = user_info['display_name']
+            message_count = user_info['message_count']
+            last_message = user_info['last_message']
+            messages = user_info['messages']
             
             html_content += f"""
                 <div class="user-card">
-                    <div class="user-header" onclick="toggleMessages('{actual_id}')">
+                    <div class="user-header" onclick="toggleMessages({user_index})">
                         <div class="user-info">
-                            👤 {user_display_name} (ID: {actual_id}) | 메시지: {message_count}개 | 최근: {last_message}
+                            👤 {display_name} (ID: {actual_id}) | 메시지: {message_count}개 | 최근: {last_message}
                         </div>
-                        <button class="send-message-btn" onclick="openMessageModal('{actual_id}', '{user_display_name}'); event.stopPropagation();">
+                        <button class="send-message-btn" onclick="openMessageModal('{actual_id}', '{display_name}'); event.stopPropagation();">
                             💬 메시지 보내기
                         </button>
                     </div>
-                    <div class="messages" id="messages-{actual_id}">
+                    <div class="messages" id="messages-{user_index}">
             """
             
-            # 메시지들
+            # 메시지들 생성
             for msg in messages:
                 msg_type = msg['type']
                 content = msg['message']
@@ -4402,7 +4424,7 @@ async def view_conversations_web():
                     type_class = 'admin'
                     type_label = '👨‍💼'
                     type_color = 'admin-type'
-                elif msg_type in ['user', 'postback'] or msg_type == user_display_name:
+                elif msg_type in ['user', 'postback'] or msg_type == display_name:
                     type_class = 'user'
                     type_label = '👤'
                     type_color = 'user-type'
@@ -4412,7 +4434,7 @@ async def view_conversations_web():
                     type_color = 'bot-type'
                 
                 # HTML 이스케이프 처리
-                content = content.replace('<', '&lt;').replace('>', '&gt;').replace('&', '&amp;').replace('\n', '<br>')
+                content = content.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('\n', '<br>')
                 
                 html_content += f"""
                         <div class="message {type_class}">
@@ -4429,7 +4451,8 @@ async def view_conversations_web():
                 </div>
             """
         
-        html_content += """
+        # 모달 및 JavaScript 추가
+        html_content += f"""
             </div>
             
             <!-- 메시지 송신 모달 -->
@@ -4472,7 +4495,7 @@ async def view_conversations_web():
                     <div id="broadcastAlertContainer"></div>
                     
                     <div class="form-group">
-                        <label class="form-label">대상 사용자 수: <span id="userCount">{total_users}</span>명</label>
+                        <label class="form-label">대상 사용자 수: <span id="userCount">{len(conversations)}</span>명</label>
                     </div>
                     
                     <div class="form-group">
@@ -4487,240 +4510,276 @@ async def view_conversations_web():
             </div>
             
             <script>
+                // 사용자 데이터를 JavaScript 전역 변수로 저장
+                const userMappings = {user_mappings};
                 let currentRecipientId = '';
                 let currentRecipientName = '';
                 
-                function toggleMessages(userId) {
-                    const messages = document.getElementById('messages-' + userId);
-                    if (messages.style.display === 'none' || messages.style.display === '') {
-                        messages.style.display = 'block';
-                    } else {
-                        messages.style.display = 'none';
-                    }
-                }
+                console.log('로드된 사용자 매핑:', userMappings);
                 
-                function searchMessages() {
+                function toggleMessages(userIndex) {{
+                    console.log('toggleMessages 호출됨:', userIndex);
+                    const messages = document.getElementById('messages-' + userIndex);
+                    console.log('메시지 엘리먼트:', messages);
+                    
+                    if (messages) {{
+                        if (messages.style.display === 'none' || messages.style.display === '') {{
+                            messages.style.display = 'block';
+                            console.log('메시지 표시:', userIndex);
+                        }} else {{
+                            messages.style.display = 'none';
+                            console.log('메시지 숨김:', userIndex);
+                        }}
+                    }} else {{
+                        console.error('메시지 엘리먼트를 찾을 수 없음:', 'messages-' + userIndex);
+                        // 모든 메시지 엘리먼트 출력해보기
+                        const allMessages = document.querySelectorAll('[id^="messages-"]');
+                        console.log('존재하는 메시지 엘리먼트들:', Array.from(allMessages).map(el => el.id));
+                    }}
+                }}
+                
+                function searchMessages() {{
                     const searchTerm = document.getElementById('searchBox').value.toLowerCase();
                     const userCards = document.querySelectorAll('.user-card');
                     
-                    userCards.forEach(card => {
+                    userCards.forEach(card => {{
                         const header = card.querySelector('.user-header').textContent.toLowerCase();
                         const messages = card.querySelectorAll('.message-content');
                         let hasMatch = header.includes(searchTerm);
                         
-                        if (!hasMatch) {
-                            messages.forEach(msg => {
-                                if (msg.textContent.toLowerCase().includes(searchTerm)) {
+                        if (!hasMatch) {{
+                            messages.forEach(msg => {{
+                                if (msg.textContent.toLowerCase().includes(searchTerm)) {{
                                     hasMatch = true;
-                                }
-                            });
-                        }
+                                }}
+                            }});
+                        }}
                         
                         card.style.display = hasMatch ? 'block' : 'none';
-                    });
-                }
+                    }});
+                }}
                 
-                function openMessageModal(recipientId, recipientName) {
+                function openMessageModal(recipientId, recipientName) {{
+                    console.log('openMessageModal 호출됨:', recipientId, recipientName);
+                    
                     currentRecipientId = recipientId;
                     currentRecipientName = recipientName;
                     
                     document.getElementById('recipientId').value = recipientId;
-                    document.getElementById('recipientInfo').value = `${recipientName} (ID: ${recipientId})`;
+                    document.getElementById('recipientInfo').value = `${{recipientName}} (ID: ${{recipientId}})`;
                     document.getElementById('messageContent').value = '';
                     document.getElementById('messageModal').style.display = 'block';
                     
                     // 알림 초기화
                     document.getElementById('alertContainer').innerHTML = '';
-                }
+                    
+                    console.log('모달 열림 완료');
+                }}
                 
-                function closeMessageModal() {
+                function closeMessageModal() {{
                     document.getElementById('messageModal').style.display = 'none';
-                }
+                }}
                 
-                function openBroadcastModal() {
+                function openBroadcastModal() {{
                     document.getElementById('broadcastContent').value = '';
                     document.getElementById('broadcastModal').style.display = 'block';
                     document.getElementById('broadcastAlertContainer').innerHTML = '';
-                }
+                }}
                 
-                function closeBroadcastModal() {
+                function closeBroadcastModal() {{
                     document.getElementById('broadcastModal').style.display = 'none';
-                }
+                }}
                 
-                function showAlert(containerId, message, type) {
+                function showAlert(containerId, message, type) {{
                     const alertHtml = `
-                        <div class="alert alert-${type}">
-                            ${message}
+                        <div class="alert alert-${{type}}" style="display: block;">
+                            ${{message}}
                         </div>
                     `;
                     document.getElementById(containerId).innerHTML = alertHtml;
                     
                     // 3초 후 알림 자동 제거
-                    setTimeout(() => {
-                        const alertElement = document.querySelector(`#${containerId} .alert`);
-                        if (alertElement) {
+                    setTimeout(() => {{
+                        const alertElement = document.querySelector(`#${{containerId}} .alert`);
+                        if (alertElement) {{
                             alertElement.style.display = 'none';
-                        }
-                    }, 3000);
-                }
+                        }}
+                    }}, 3000);
+                }}
                 
-                async function sendMessage(event) {
+                async function sendMessage(event) {{
                     event.preventDefault();
                     
                     const recipientId = document.getElementById('recipientId').value;
                     const messageContent = document.getElementById('messageContent').value.trim();
                     const sendBtn = document.getElementById('sendBtn');
                     
-                    if (!messageContent) {
+                    if (!messageContent) {{
                         showAlert('alertContainer', '메시지 내용을 입력해주세요.', 'error');
                         return;
-                    }
+                    }}
                     
                     // 로딩 상태
                     sendBtn.disabled = true;
                     sendBtn.textContent = '전송 중...';
-                    document.querySelector('.modal-content').classList.add('loading');
+                    document.querySelector('#messageModal .modal-content').classList.add('loading');
                     
-                    try {
-                        const response = await fetch('/send-message', {
+                    try {{
+                        const response = await fetch('/send-message', {{
                             method: 'POST',
-                            headers: {
+                            headers: {{
                                 'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
+                            }},
+                            body: JSON.stringify({{
                                 recipient_id: recipientId,
                                 message: messageContent
-                            })
-                        });
+                            }})
+                        }});
                         
                         const result = await response.json();
                         
-                        if (result.status === 'success') {
+                        if (result.status === 'success') {{
                             showAlert('alertContainer', `✅ 메시지가 성공적으로 전송되었습니다!`, 'success');
                             document.getElementById('messageContent').value = '';
                             
                             // 2초 후 모달 닫기
-                            setTimeout(() => {
+                            setTimeout(() => {{
                                 closeMessageModal();
                                 location.reload(); // 페이지 새로고침하여 새 메시지 표시
-                            }, 2000);
-                        } else {
-                            showAlert('alertContainer', `❌ 전송 실패: ${result.error}`, 'error');
-                        }
-                    } catch (error) {
-                        showAlert('alertContainer', `❌ 네트워크 오류: ${error.message}`, 'error');
-                    } finally {
+                            }}, 2000);
+                        }} else {{
+                            showAlert('alertContainer', `❌ 전송 실패: ${{result.error}}`, 'error');
+                        }}
+                    }} catch (error) {{
+                        showAlert('alertContainer', `❌ 네트워크 오류: ${{error.message}}`, 'error');
+                    }} finally {{
                         // 로딩 상태 해제
                         sendBtn.disabled = false;
                         sendBtn.textContent = '📤 메시지 전송';
-                        document.querySelector('.modal-content').classList.remove('loading');
-                    }
-                }
+                        document.querySelector('#messageModal .modal-content').classList.remove('loading');
+                    }}
+                }}
                 
-                async function sendBroadcast() {
+                async function sendBroadcast() {{
                     const broadcastContent = document.getElementById('broadcastContent').value.trim();
                     const broadcastBtn = document.getElementById('broadcastBtn');
-                    const userCount = {total_users};
+                    const userCount = userMappings.length;
                     
-                    if (!broadcastContent) {
+                    if (!broadcastContent) {{
                         showAlert('broadcastAlertContainer', '메시지 내용을 입력해주세요.', 'error');
                         return;
-                    }
+                    }}
                     
-                    if (!confirm(`정말로 ${userCount}명의 모든 사용자에게 메시지를 전송하시겠습니까?`)) {
+                    if (!confirm(`정말로 ${{userCount}}명의 모든 사용자에게 메시지를 전송하시겠습니까?`)) {{
                         return;
-                    }
+                    }}
                     
                     // 로딩 상태
                     broadcastBtn.disabled = true;
                     broadcastBtn.textContent = '전송 중...';
                     
-                    try {
-                        // 모든 사용자 ID 수집
-                        const userIds = {list(conversations.keys())};
+                    try {{
                         let successCount = 0;
                         let failCount = 0;
                         
-                        showAlert('broadcastAlertContainer', `📤 ${userCount}명에게 메시지 전송 시작...`, 'success');
+                        showAlert('broadcastAlertContainer', `📤 ${{userCount}}명에게 메시지 전송 시작...`, 'success');
                         
                         // 순차적으로 전송 (API 제한 고려)
-                        for (let i = 0; i < userIds.length; i++) {
-                            const fullUserId = userIds[i];
-                            // ID:12345, name:홍길동 형태에서 실제 ID만 추출
-                            const actualId = fullUserId.split(',')[0].replace('ID:', '').strip();
+                        for (let i = 0; i < userMappings.length; i++) {{
+                            const user = userMappings[i];
+                            const userId = user.actual_id;
                             
-                            try {
-                                const response = await fetch('/send-message', {
+                            try {{
+                                const response = await fetch('/send-message', {{
                                     method: 'POST',
-                                    headers: {
+                                    headers: {{
                                         'Content-Type': 'application/json',
-                                    },
-                                    body: JSON.stringify({
-                                        recipient_id: actualId,
+                                    }},
+                                    body: JSON.stringify({{
+                                        recipient_id: userId,
                                         message: broadcastContent
-                                    })
-                                });
+                                    }})
+                                }});
                                 
-                                if (response.ok) {
+                                const result = await response.json();
+                                
+                                if (result.status === 'success') {{
                                     successCount++;
-                                } else {
+                                    console.log(`전송 성공: ${{userId}}`);
+                                }} else {{
                                     failCount++;
-                                }
+                                    console.error(`전송 실패: ${{userId}}`, result.error);
+                                }}
                                 
                                 // 진행 상황 업데이트
-                                broadcastBtn.textContent = `전송 중... (${i + 1}/${userCount})`;
+                                broadcastBtn.textContent = `전송 중... (${{i + 1}}/${{userCount}})`;
                                 
                                 // API 제한을 고려한 지연
-                                if (i < userIds.length - 1) {
+                                if (i < userMappings.length - 1) {{
                                     await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
-                                }
+                                }}
                                 
-                            } catch (error) {
+                            }} catch (error) {{
                                 failCount++;
-                                console.error(`전송 실패 (${actualId}):`, error);
-                            }
-                        }
+                                console.error(`전송 오류 (${{userId}}):`, error);
+                            }}
+                        }}
                         
                         // 결과 표시
-                        if (successCount > 0) {
+                        if (successCount > 0) {{
                             showAlert('broadcastAlertContainer', 
-                                `✅ 전송 완료! 성공: ${successCount}명, 실패: ${failCount}명`, 
+                                `✅ 전송 완료! 성공: ${{successCount}}명, 실패: ${{failCount}}명`, 
                                 'success');
                             
                             // 3초 후 모달 닫기
-                            setTimeout(() => {
+                            setTimeout(() => {{
                                 closeBroadcastModal();
                                 location.reload();
-                            }, 3000);
-                        } else {
+                            }}, 3000);
+                        }} else {{
                             showAlert('broadcastAlertContainer', '❌ 모든 메시지 전송에 실패했습니다.', 'error');
-                        }
+                        }}
                         
-                    } catch (error) {
-                        showAlert('broadcastAlertContainer', `❌ 전체 전송 오류: ${error.message}`, 'error');
-                    } finally {
+                    }} catch (error) {{
+                        showAlert('broadcastAlertContainer', `❌ 전체 전송 오류: ${{error.message}}`, 'error');
+                    }} finally {{
                         broadcastBtn.disabled = false;
                         broadcastBtn.textContent = '📢 전체 전송 (주의: 모든 사용자에게 전송됩니다!)';
-                    }
-                }
+                    }}
+                }}
                 
                 // 모달 외부 클릭 시 닫기
-                window.onclick = function(event) {
+                window.onclick = function(event) {{
                     const messageModal = document.getElementById('messageModal');
                     const broadcastModal = document.getElementById('broadcastModal');
                     
-                    if (event.target === messageModal) {
+                    if (event.target === messageModal) {{
                         closeMessageModal();
-                    }
-                    if (event.target === broadcastModal) {
+                    }}
+                    if (event.target === broadcastModal) {{
                         closeBroadcastModal();
-                    }
-                }
+                    }}
+                }}
+                
+                // 페이지 로드 시 디버깅 정보 출력
+                document.addEventListener('DOMContentLoaded', function() {{
+                    console.log('페이지 로드 완료');
+                    console.log('사용자 수:', userMappings.length);
+                    
+                    // 모든 메시지 엘리먼트 확인
+                    const allMessages = document.querySelectorAll('[id^="messages-"]');
+                    console.log('메시지 엘리먼트 수:', allMessages.length);
+                    console.log('메시지 엘리먼트 ID들:', Array.from(allMessages).map(el => el.id));
+                    
+                    // 모든 버튼 확인
+                    const allButtons = document.querySelectorAll('.send-message-btn');
+                    console.log('메시지 버튼 수:', allButtons.length);
+                }});
                 
                 // 5분마다 자동 새로고침
-                setInterval(() => {
+                setInterval(() => {{
                     location.reload();
-                }, 300000);
+                }}, 300000);
             </script>
         </body>
         </html>
@@ -4729,7 +4788,7 @@ async def view_conversations_web():
         return html_content
         
     except Exception as e:
-        return f"<h1>오류 발생</h1><p>{str(e)}</p>"
+        return f"<h1>오류 발생</h1><p>{str(e)}</p><pre>{traceback.format_exc()}</pre>"
 
 @app.get("/conversations-json")
 async def get_conversations_json():
