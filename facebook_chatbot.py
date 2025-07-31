@@ -352,7 +352,7 @@ class ConversationLogger:
             
             # 메시지 데이터 구성
             message_data = {
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": datetime.now(korea_timezone).strftime("%Y-%m-%d %H:%M:%S"),
                 "type": display_type,  # 실제 사용자 이름 또는 'bot'
                 "message": content
             }
