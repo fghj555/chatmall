@@ -1903,9 +1903,10 @@ def handle_postback(sender_id: str, payload: str):
             product_code = payload.replace("BUY_", "")
             print(f"🛒 [BUY] 새로운 주문 시작 - product_code: {product_code}")
             
-            # 기존 데이터 초기화하되 AI 검색 모드는 유지
+            # 🔥 주문 시작 시 AI 검색 모드 해제 + 기존 데이터 초기화
             clear_user_data(sender_id, "new_order")
-            UserDataManager.update_user_data(sender_id, ai_search_mode=True)  # AI 검색 모드 유지
+            # AI 검색 모드 해제 (주문 진행 모드로 전환)
+            UserDataManager.update_user_data(sender_id, ai_search_mode=False)
             
             product = PRODUCT_CACHE.get(product_code)
             if product:
@@ -1918,10 +1919,11 @@ def handle_postback(sender_id: str, payload: str):
                     shipping_fee=int(float(product.get("배송비", 0) or 0)),
                     max_quantity=int(float(product.get("최대구매수량", 0) or 0)),
                     product_info=product,  # 상품 정보 보존
-                    order_status="selecting"
+                    order_status="selecting",
+                    ai_search_mode=False  # 🔥 명시적으로 AI 검색 모드 해제
                 )
                 
-                print(f"[BUY] 상품 정보 저장 완료: {product_code}")
+                print(f"[BUY] 상품 정보 저장 완료 + AI 검색 모드 해제: {product_code}")
                 
                 # 구매 확인 메시지 전송
                 purchase_message = (
@@ -1939,7 +1941,8 @@ def handle_postback(sender_id: str, payload: str):
             else:
                 print(f"[BUY] 상품 정보 없음: {product_code}")
                 send_facebook_message(sender_id, "❌ Product information not found.\n Please search again.")
-                # AI 검색 모드 유지하여 다시 검색할 수 있도록 안내
+                # 🔥 상품 정보가 없으면 다시 AI 검색 모드로 돌아가기
+                UserDataManager.update_user_data(sender_id, ai_search_mode=True)
                 time_module.sleep(1)
                 send_navigation_buttons(sender_id)
             return True
@@ -1978,18 +1981,15 @@ def handle_postback(sender_id: str, payload: str):
             product_code = payload.replace("CANCEL_", "")
             print(f"[CANCEL] 주문 취소 - product_code: {product_code}")
             
-            # 주문 데이터만 삭제하고 AI 검색 모드는 유지
-            OrderDataManager.clear_order_data(sender_id)
-            UserDataManager.clear_user_data(sender_id)  # 임시 데이터 삭제
-            UserDataManager.update_user_data(sender_id, ai_search_mode=True)  # AI 검색 모드 유지
+            # 🔥 주문 취소 시 완전 초기화 (AI 검색 모드도 해제)
+            clear_user_data(sender_id, "order_cancel")  # 이미 AI 검색 모드도 해제됨
             
             send_facebook_message(sender_id, 
                 "❌ Order cancelled successfully!\n"
-                "🔄 Feel free to browse other products or try again. 😊\n\n"
-                "🤖 AI Search Mode is still active - just type what you're looking for!")
+                "🔄 Feel free to browse other products or try again. 😊")
             
             time_module.sleep(1)
-            send_navigation_buttons(sender_id)  # AI 검색 모드 유지된 상태의 네비게이션
+            send_go_home_card(sender_id)  # 홈으로 돌아가기 옵션 제공
             return True
         
         # ===== 주문 정보 확인 처리 =====
