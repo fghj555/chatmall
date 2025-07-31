@@ -12,6 +12,7 @@ from urllib.parse import quote
 import math
 import random
 import gspread
+import time as time_module
 from google.oauth2 import service_account
 import gspread
 from datetime import datetime
@@ -841,7 +842,6 @@ def get_user_name(sender_id: str) -> str:
         return ""
 def send_default_help_message(sender_id: str, user_message: str):
     """기본 도움말 메시지 - AI 검색 모드가 아닐 때"""
-    import time as time_module
     
     # 현재 일반 채팅 모드임을 알려주고 옵션 제공
     help_text = (
@@ -1591,6 +1591,20 @@ def send_option_selection_buttons(sender_id: str, product_code: str):
         send_facebook_message(sender_id, "⚙️ Please select an option:")
         time_module.sleep(1.5)
         
+        # 품절 옵션이 있는지 확인하여 추가 안내
+        soldout_options = [opt for opt in options if "품절" in opt.lower()]
+        available_options = [opt for opt in options if "품절" not in opt.lower()]
+        
+        if soldout_options:
+            soldout_info = (
+                f"ℹ️ **Availability Info:**\n"
+                f"✅ Available: {len(available_options)} options\n"
+                f"❌ Sold out: {len(soldout_options)} options\n\n"
+                f"💡 Options marked with ❌ are currently unavailable."
+            )
+            send_facebook_message(sender_id, soldout_info)
+            time_module.sleep(1)
+        
         # 총 메시지 수 계산
         total_messages = math.ceil(len(options) / 3)
         successful_messages = 0
@@ -1615,9 +1629,14 @@ def send_option_selection_buttons(sender_id: str, product_code: str):
                         name = parts[0].strip()
                         extra_price = float(parts[1].strip()) if parts[1].strip() else 0
                         
-                        caption = f"{name}"
-                        if extra_price > 0:
-                            caption += f" (+{int(extra_price):,}원)"
+                        # 🔥 품절 옵션 표시 개선
+                        if "품절" in name.lower():
+                            caption = f"❌ {name}"  # 품절 옵션에 ❌ 표시
+                            print(f"[OPTION] 품절 옵션 감지: {name}")
+                        else:
+                            caption = f"{name}"
+                            if extra_price > 0:
+                                caption += f" (+{int(extra_price):,}원)"
                         
                         # Facebook 버튼 제목 길이 제한 (20자)
                         if len(caption) > 20:
@@ -1625,6 +1644,7 @@ def send_option_selection_buttons(sender_id: str, product_code: str):
                         
                         payload = f'OPTION_{product_code}_{name}_{int(extra_price)}'
                         
+                        # 🔥 모든 옵션을 버튼으로 생성 (품절 옵션도 포함)
                         buttons.append({
                             'type': 'postback',
                             'title': caption,
@@ -1678,10 +1698,12 @@ def send_option_selection_buttons(sender_id: str, product_code: str):
                         print(f"[OPTION] 메시지 {message_count} 전송 성공! (ID: {message_id})")
                         successful_messages += 1
                         
+                        # 로그 생성
                         option_card_log = f"[옵션 선택 카드 {message_count}/{total_messages}]\n"
                         option_card_log += f"메시지: 📌 Pick your preferred option ({message_count}/{total_messages}):\n"
                         for btn in buttons:
-                            option_card_log += f"버튼: {btn['title']}\n"
+                            status = "❌ 품절" if "❌" in btn['title'] else "✅ 구매가능"
+                            option_card_log += f"버튼: {btn['title']} ({status})\n"
                             
                         ConversationLogger.log_bot_message(sender_id, option_card_log.strip())
 
@@ -1709,6 +1731,13 @@ def send_option_selection_buttons(sender_id: str, product_code: str):
         
         print(f"[OPTION] Button Template 전송 완료 - 성공: {successful_messages}/{total_messages}개 메시지")
         
+        # 🔥 품절 옵션이 많은 경우 추가 안내
+        if len(soldout_options) > len(available_options):
+            time_module.sleep(2)
+            send_facebook_message(sender_id, 
+                "ℹ️ **Notice**: Most options are currently sold out.\n"
+                "Please select from available options (without ❌ mark) or check back later.")
+        
         if successful_messages == 0:
             print(f"[OPTION] 모든 메시지 전송 실패 - 수량 선택으로 이동")
             send_facebook_message(sender_id, "⚠️ 옵션 처리 중 오류가 발생했습니다. 수량을 입력해주세요.")
@@ -1726,7 +1755,7 @@ def send_option_selection_buttons(sender_id: str, product_code: str):
         return
 
 def handle_option_selection_from_payload(sender_id: str, payload: str):
-    """옵션 선택 처리 (Postback과 Quick Reply 공통)"""
+    """옵션 선택 처리 (Postback과 Quick Reply 공통) - 품절 체크 추가"""
     try:
         print(f"[OPTION_PARSE] payload 파싱 시작: {payload}")
         
@@ -1749,12 +1778,16 @@ def handle_option_selection_from_payload(sender_id: str, payload: str):
             print(f"   옵션명: {option_name}")
             print(f"   추가금액: {extra_price}원")
             
+            # 🔥 품절 체크
+            if "품절" in option_name.lower():
+                print(f"❌ [OPTION_SOLDOUT] 품절 옵션 선택됨: {option_name}")
+                handle_soldout_option(sender_id, product_code, option_name)
+                return
+            
             # 상품 정보 확인 및 캐시 보존
             product = PRODUCT_CACHE.get(product_code)
             if not product:
                 print(f"[OPTION_SELECT] 상품 캐시에서 찾을 수 없음: {product_code}")
-                print(f"[CACHE_STATUS] 현재 캐시 상품 수: {len(PRODUCT_CACHE)}")
-                print(f"[CACHE_KEYS] 캐시 키 목록: {list(PRODUCT_CACHE.keys())}")
                 
                 # 사용자 데이터에서 상품 정보 복구 시도
                 user_data = UserDataManager.get_user_data(sender_id)
@@ -1806,6 +1839,26 @@ def handle_option_selection_from_payload(sender_id: str, payload: str):
         import traceback
         print(f"[OPTION_SELECT] 상세 오류: {traceback.format_exc()}")
         send_facebook_message(sender_id, "❌ An error occurred while selecting your options.\n Please try again.")
+
+def handle_soldout_option(sender_id: str, product_code: str, option_name: str):
+    """품절 옵션 선택 시 처리"""
+    
+    print(f"❌ [SOLDOUT] 품절 옵션 처리: {option_name}")
+    
+    # 품절 안내 메시지
+    soldout_message = (
+        f"😔 **Sorry, this option is currently sold out**\n\n"
+        f"❌ **Unavailable**: {option_name}\n\n"
+        f"🔄 **Please choose a different option from the available ones below.**\n\n"
+        f"💡 **Tip**: Available options are shown without '품절' mark."
+    )
+    
+    send_facebook_message(sender_id, soldout_message)
+    time_module.sleep(2)
+    
+    # 옵션 선택 다시 표시
+    print(f"🔄 [SOLDOUT] 옵션 선택 재표시")
+    send_option_selection_buttons(sender_id, product_code)
 
 def handle_postback(sender_id: str, payload: str):
     """Postback 처리 함수"""
