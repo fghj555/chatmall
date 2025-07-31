@@ -4244,9 +4244,10 @@ async def view_conversations_web():
                 content = msg['message']
                 timestamp = msg['timestamp']
                 
-                type_class = 'user' if msg_type == 'user' else 'bot'
-                type_label = '👤' if msg_type == 'user' else '🤖'
-                type_color = 'user-type' if msg_type == 'user' else 'bot-type'
+                # 🔥 수정: 'bot'이 아니면 사용자로 처리
+                type_class = 'bot' if msg_type == 'bot' else 'user'
+                type_label = '🤖' if msg_type == 'bot' else '👤'
+                type_color = 'bot-type' if msg_type == 'bot' else 'user-type'
                 
                 html_content += f"""
                         <div class="message {type_class}">
