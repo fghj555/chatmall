@@ -763,7 +763,7 @@ def send_facebook_carousel(sender_id: str, products: list):
             }
         },
         'access_token': PAGE_ACCESS_TOKEN,
-        'messaging_type': 'RESPONSE'  # 응답 타입 명시
+        'messaging_type': 'RESPONSE'
     }
     
     headers = {'Content-Type': 'application/json'}
@@ -775,17 +775,19 @@ def send_facebook_carousel(sender_id: str, products: list):
             message_id = result.get("message_id")
             print(f"카루셀 메시지 전송 성공 (ID: {message_id})")
             
-            # Facebook에 전송된 카루셀 내용 그대로 로깅
-            carousel_message = "[카루셀 메시지]\n"
-            for i, element in enumerate(elements, 1):
-                carousel_message += f"카드 {i}:\n"
-                carousel_message += f"제목: {element['title']}\n"
-                carousel_message += f"{element['subtitle']}\n"
-                carousel_message += f"버튼: View Product, Buy Now\n\n"
+            # 🔥 카루셀 메시지 로깅 (이미지 URL 포함)
+            carousel_log = "[카루셀 메시지]\n"
+            for i, product in enumerate(products, 1):
+                carousel_log += f"카드 {i}:\n"
+                carousel_log += f"제목: {product.get('제목', '상품')}\n"
+                carousel_log += f"가격: {product.get('가격', 0):,}원\n"
+                carousel_log += f"배송비: {product.get('배송비', 0):,}원\n"
+                carousel_log += f"원산지: {product.get('원산지', '')}\n"
+                carousel_log += f"이미지: {product.get('이미지', '')}\n"
+                carousel_log += f"버튼: View Product, Buy Now\n\n"
             
-            ConversationLogger.log_bot_message(sender_id, carousel_message.strip())
+            ConversationLogger.log_bot_message(sender_id, carousel_log.strip())
             
-            # ✅ 봇이 보낸 메시지 ID 기록
             if message_id:
                 BOT_MESSAGES.add(message_id)
         else:
@@ -905,6 +907,17 @@ def send_welcome_message(sender_id: str):
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print(f"환영 버튼 카드 전송 성공")
+            
+            # 🔥 환영 카드 로깅
+            welcome_card_log = (
+                "[환영 메시지 카드]\n"
+                f"이미지: https://drive.google.com/uc?export=view&id=156l_KbzB2bcyyuOXvYiyFrA_bAe1PHk_\n"
+                "버튼 1: 🌐 Let's Go ChatMall (웹 링크)\n"
+                "버튼 2: 👤 Sign Up Now (회원가입)\n"
+                "버튼 3: 📦 Track Order (주문 추적)"
+            )
+            ConversationLogger.log_bot_message(sender_id, welcome_card_log)
+            
             # AI 검색 버튼을 별도 메시지로 전송
             time_module.sleep(1)
             send_ai_search_button(sender_id)
@@ -951,6 +964,7 @@ def send_ai_search_button(sender_id: str):
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print(f"AI 검색 Quick Reply 버튼 전송 성공")
+            ConversationLogger.log_bot_message(sender_id, "[AI 검색 버튼 카드]\n버튼: 🤖 Start My AI Picks")
         else:
             print(f"AI 검색 Quick Reply 버튼 전송 실패: {response.status_code} - {response.text}")
     except Exception as e:
@@ -1039,6 +1053,13 @@ def send_navigation_buttons(sender_id: str):
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print(f"네비게이션 카드 메시지 전송 성공")
+            nav_card_log = (
+                "[네비게이션 카드]\n"
+                "제목: Choose your next action from the options below\n"
+                "버튼 1: ♻️ Reset Conversation\n"
+                "버튼 2: 🏠 Go Home"
+            )
+            ConversationLogger.log_bot_message(sender_id, nav_card_log)
         else:
             print(f"네비게이션 카드 메시지 전송 실패: {response.status_code} - {response.text}")
     except Exception as e:
@@ -1096,6 +1117,14 @@ def send_go_home_card(sender_id: str):
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print(f"Go Home 카드 메시지 전송 성공")
+            go_home_log = (
+                "[Go Home 카드]\n"
+                "제목: Navigation\n"
+                "부제목: Return to main menu or continue shopping:\n"
+                "버튼 1: 🏠 Go Home\n"
+                "버튼 2: 🤖 AI Search"
+            )
+            ConversationLogger.log_bot_message(sender_id, go_home_log)
         else:
             print(f"Go Home 카드 메시지 전송 실패: {response.status_code} - {response.text}")
     except Exception as e:
@@ -1392,6 +1421,15 @@ def send_order_confirmation(sender_id: str, product_code: str, quantity: int):
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print(f"주문 확인 카드 전송 성공")
+            order_card_log = (
+                f"[주문 확인 카드]\n"
+                f"제목: Your Order\n"
+                f"부제목: Please review your order and use the buttons below to confirm or cancel.\n"
+                f"이미지: {product.get('이미지', '')}\n"
+                f"버튼 1: ✅ Correct\n"
+                f"버튼 2: ✖️ Incorrect"
+            )
+            ConversationLogger.log_bot_message(sender_id, order_card_log)
         else:
             print(f"주문 확인 카드 전송 실패: {response.status_code} - {response.text}")
     except Exception as e:
@@ -1555,6 +1593,13 @@ def send_option_selection_buttons(sender_id: str, product_code: str):
                         print(f"[OPTION] 메시지 {message_count} 전송 성공! (ID: {message_id})")
                         successful_messages += 1
                         
+                        option_card_log = f"[옵션 선택 카드 {message_count}/{total_messages}]\n"
+                        option_card_log += f"메시지: 📌 Pick your preferred option ({message_count}/{total_messages}):\n"
+                        for btn in buttons:
+                            option_card_log += f"버튼: {btn['title']}\n"
+                            
+                        ConversationLogger.log_bot_message(sender_id, option_card_log.strip())
+
                         # 봇이 보낸 메시지 ID 기록
                         if message_id:
                             BOT_MESSAGES.add(message_id)
@@ -2121,7 +2166,6 @@ def send_order_confirmation_review(sender_id: str):
 💰Total_money: {order_data.get('total_price', 0):,}원"""
     
     send_facebook_message(sender_id, confirmation_text)
-    
     time_module.sleep(1)
     
     # 확인/수정 버튼 카드 전송
@@ -2166,6 +2210,14 @@ def send_order_confirmation_review(sender_id: str):
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print(f"✅ 주문 확인 카드 전송 성공")
+            review_card_log = (
+                "[주문 정보 확인 카드]\n"
+                "제목: Order Information Review\n"
+                "부제목: Please confirm if all information is correct\n"
+                "버튼 1: ✅ Correct\n"
+                "버튼 2: ❌ Incorrect"
+            )
+            ConversationLogger.log_bot_message(sender_id, review_card_log)
             OrderDataManager.update_order_data(sender_id, order_status="review_confirmation")
         else:
             print(f"❌ 주문 확인 카드 전송 실패: {response.status_code}")
@@ -2179,7 +2231,6 @@ def send_correction_options(sender_id: str):
     import time as time_module
     
     send_facebook_message(sender_id, "Which is incorrect?")
-    
     time_module.sleep(1)
     
     url = f"https://graph.facebook.com/v18.0/me/messages"
@@ -2245,6 +2296,21 @@ def send_correction_options(sender_id: str):
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print(f"✅ 수정 옵션 카드 전송 성공")
+            correction_log = (
+                "[수정 옵션 카드]\n"
+                "카드 1:\n"
+                "제목: Select Information to Correct\n"
+                "부제목: Choose what you want to update\n"
+                "버튼 1: Name\n"
+                "버튼 2: Address\n"
+                "버튼 3: Contact Number\n\n"
+                "카드 2:\n"
+                "제목: More Options\n"
+                "부제목: Additional correction options\n"
+                "버튼 1: Email\n"
+                "버튼 2: ALL"
+            )
+            ConversationLogger.log_bot_message(sender_id, correction_log)            
         else:
             print(f"❌ 수정 옵션 카드 전송 실패: {response.status_code}")
     except Exception as e:
@@ -2303,6 +2369,13 @@ After sending the payment, please click the "PAYMENT SENT" button so we can proc
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print(f"✅ 결제 확인 버튼 전송 성공")
+            payment_button_log = (
+                "[결제 확인 버튼 카드]\n"
+                "제목: Payment Status\n"
+                "부제목: Click after completing your payment\n"
+                "버튼: ✅ PAYMENT SENT"
+            )
+            ConversationLogger.log_bot_message(sender_id, payment_button_log)
             OrderDataManager.update_order_data(sender_id, order_status="waiting_payment")
         else:
             print(f"❌ 결제 확인 버튼 전송 실패: {response.status_code}")
