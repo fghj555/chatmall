@@ -174,10 +174,11 @@ class UserDataManager:
                 "unit_price": 0,
                 "shipping_fee": 0,
                 "total_price": 0,
-                "bundle_size": 0,  # 묶음당 수량 추가
-                "bundles_needed": 1,  # 필요한 묶음 수 추가
+                "bundle_size": 0,
+                "bundles_needed": 1,
                 "product_info": {},
                 "order_status": "none",
+                "ai_search_mode": False,  # 추가
                 "last_updated": time.time()
             }
             save_json_data(USER_DATA_FILE, all_data)
@@ -838,6 +839,85 @@ def get_user_name(sender_id: str) -> str:
     except Exception as e:
         print(f"[GET_NAME] 사용자 이름 가져오기 오류: {e}")
         return ""
+def send_default_help_message(sender_id: str, user_message: str):
+    """기본 도움말 메시지 - AI 검색 모드가 아닐 때"""
+    import time as time_module
+    
+    # 현재 일반 채팅 모드임을 알려주고 옵션 제공
+    help_text = (
+        f"💬 You're currently in **General Chat Mode**.\n\n"
+        f"🤔 Would you like me to help you find products?\n\n"
+        f"👇 Choose an option below:"
+    )
+    
+    send_facebook_message(sender_id, help_text)
+    time_module.sleep(1)
+    
+    # 옵션 카드 전송
+    send_search_option_card(sender_id)
+
+def send_search_option_card(sender_id: str):
+    """검색 옵션 선택 카드"""
+    url = f"https://graph.facebook.com/v18.0/me/messages"
+    
+    data = {
+        'recipient': {'id': sender_id},
+        'message': {
+            'attachment': {
+                'type': 'template',
+                'payload': {
+                    'template_type': 'generic',
+                    'elements': [
+                        {
+                            'title': 'What would you like to do?',
+                            'subtitle': 'Choose your next action:',
+                            'image_url': '',
+                            'buttons': [
+                                {
+                                    'type': 'postback',
+                                    'title': '🤖 Start AI Search',
+                                    'payload': 'AI_SEARCH'
+                                },
+                                {
+                                    'type': 'postback',
+                                    'title': '🏠 Main Menu',
+                                    'payload': 'GO_HOME'
+                                },
+                                {
+                                    'type': 'postback',
+                                    'title': '📞 Get Help',
+                                    'payload': 'HELP'
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        'access_token': PAGE_ACCESS_TOKEN,
+        'messaging_type': 'RESPONSE'
+    }
+    
+    headers = {'Content-Type': 'application/json'}
+    
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            print(f"✅ 검색 옵션 카드 전송 성공")
+            
+            option_card_log = (
+                "[검색 옵션 카드]\n"
+                "제목: What would you like to do?\n"
+                "부제목: Choose your next action:\n"
+                "버튼 1: 🤖 Start AI Search\n"
+                "버튼 2: 🏠 Main Menu\n"
+                "버튼 3: 📞 Get Help"
+            )
+            ConversationLogger.log_bot_message(sender_id, option_card_log)
+        else:
+            print(f"❌ 검색 옵션 카드 전송 실패: {response.status_code}")
+    except Exception as e:
+        print(f"❌ 검색 옵션 카드 전송 오류: {e}")
 
 def send_welcome_message(sender_id: str):
     """환영 메시지와 버튼 메뉴 전송 (Facebook 기준)"""
@@ -1742,7 +1822,7 @@ def handle_postback(sender_id: str, payload: str):
             return True
         
         # ===== 기본 메뉴 처리 =====
-        if payload == 'REGISTER':
+        elif payload == 'REGISTER':
             clear_user_data(sender_id, "register")
             send_facebook_message(sender_id,
                 "👤 Register as a member to enjoy:\n"
@@ -1766,19 +1846,26 @@ def handle_postback(sender_id: str, payload: str):
             send_go_home_card(sender_id)
             return True
         
+        # ===== 🔥 AI 검색 모드 활성화 =====
         elif payload == 'AI_SEARCH':
-            print(f"🤖 [AI_SEARCH] AI 검색 시작 - 데이터 초기화")
+            print(f"🤖 [AI_SEARCH] AI 검색 모드 활성화")
             clear_user_data(sender_id, "ai_search")
+            # AI 검색 모드 플래그 설정
+            UserDataManager.update_user_data(sender_id, ai_search_mode=True)
             send_ai_search_prompt(sender_id)
             return True
         
+        # ===== 🔥 대화 초기화 후 AI 검색 모드 =====
         elif payload == 'RESET_CONVERSATION':
-            print(f"🔄 [RESET] 명시적 초기화 요청")
+            print(f"🔄 [RESET] 대화 초기화 후 AI 검색 모드 활성화")
             clear_user_data(sender_id, "reset")
+            # AI 검색 모드 활성화
+            UserDataManager.update_user_data(sender_id, ai_search_mode=True)
             
             search_prompt_text = (
                 "🔄 Chat history cleared! ✨\n\n"
-                "💬 Now enter what you're looking for:\n\n"
+                "🤖 AI Search Mode is now ON!\n\n"
+                "💬 Enter what you're looking for:\n\n"
                 "For example: portable fan, striped tee, women's light shoes, 100 paper cups\n\n"
                 "What are you shopping for today? 😊"
             )
@@ -1787,10 +1874,28 @@ def handle_postback(sender_id: str, payload: str):
             send_navigation_buttons(sender_id)
             return True
             
+        # ===== 🔥 홈으로 이동 (AI 검색 모드 해제) =====
         elif payload == 'GO_HOME':
-            print(f"🏠 [GO_HOME] 홈으로 이동 - 데이터 초기화")
+            print(f"🏠 [GO_HOME] 홈으로 이동 - AI 검색 모드 해제")
             clear_user_data(sender_id, "go_home")
+            # AI 검색 모드 완전 해제 (clear_user_data에서 자동 처리됨)
             send_welcome_message(sender_id)
+            return True
+        
+        # ===== 🔥 도움말 요청 =====
+        elif payload == 'HELP':
+            print(f"📞 [HELP] 도움말 요청")
+            # AI 검색 모드는 유지하면서 도움말만 제공
+            send_facebook_message(sender_id, 
+                "🤝 Need help? Here's what I can do:\n\n"
+                "🤖 **AI Product Search**: Find products with smart recommendations\n"
+                "📦 **Order Management**: Place and track your orders\n"
+                "🚚 **Delivery Tracking**: Check your delivery status\n"
+                "👤 **Account**: Sign up or manage your account\n\n"
+                "💡 **Tip**: Use the 'Start AI Search' button to find products!\n\n"
+                "Need more help? Visit: https://www.chatmall.kr")
+            time_module.sleep(1)
+            send_go_home_card(sender_id)
             return True
         
         # ===== 구매하기 버튼 처리 =====
@@ -1798,8 +1903,9 @@ def handle_postback(sender_id: str, payload: str):
             product_code = payload.replace("BUY_", "")
             print(f"🛒 [BUY] 새로운 주문 시작 - product_code: {product_code}")
             
-            # 기존 데이터 초기화
+            # 기존 데이터 초기화하되 AI 검색 모드는 유지
             clear_user_data(sender_id, "new_order")
+            UserDataManager.update_user_data(sender_id, ai_search_mode=True)  # AI 검색 모드 유지
             
             product = PRODUCT_CACHE.get(product_code)
             if product:
@@ -1816,7 +1922,6 @@ def handle_postback(sender_id: str, payload: str):
                 )
                 
                 print(f"[BUY] 상품 정보 저장 완료: {product_code}")
-                print(f"[CACHE_STATUS] 상품 캐시 저장 확인 - 키: {product_code}")
                 
                 # 구매 확인 메시지 전송
                 purchase_message = (
@@ -1833,8 +1938,10 @@ def handle_postback(sender_id: str, payload: str):
                 send_option_selection_buttons(sender_id, product_code)
             else:
                 print(f"[BUY] 상품 정보 없음: {product_code}")
-                print(f"[CACHE_STATUS] 현재 캐시 상품 수: {len(PRODUCT_CACHE)}")
                 send_facebook_message(sender_id, "❌ Product information not found.\n Please search again.")
+                # AI 검색 모드 유지하여 다시 검색할 수 있도록 안내
+                time_module.sleep(1)
+                send_navigation_buttons(sender_id)
             return True
         
         # ===== 옵션 선택 버튼 처리 =====
@@ -1871,15 +1978,18 @@ def handle_postback(sender_id: str, payload: str):
             product_code = payload.replace("CANCEL_", "")
             print(f"[CANCEL] 주문 취소 - product_code: {product_code}")
             
-            # 데이터 즉시 삭제
-            clear_user_data(sender_id, "order_cancel")
+            # 주문 데이터만 삭제하고 AI 검색 모드는 유지
+            OrderDataManager.clear_order_data(sender_id)
+            UserDataManager.clear_user_data(sender_id)  # 임시 데이터 삭제
+            UserDataManager.update_user_data(sender_id, ai_search_mode=True)  # AI 검색 모드 유지
             
             send_facebook_message(sender_id, 
                 "❌ Order cancelled successfully!\n"
-                "🔄 Feel free to browse other products or try again. 😊")
+                "🔄 Feel free to browse other products or try again. 😊\n\n"
+                "🤖 AI Search Mode is still active - just type what you're looking for!")
             
             time_module.sleep(1)
-            send_go_home_card(sender_id)
+            send_navigation_buttons(sender_id)  # AI 검색 모드 유지된 상태의 네비게이션
             return True
         
         # ===== 주문 정보 확인 처리 =====
@@ -2704,28 +2814,31 @@ async def handle_user_message(sender_id: str, user_message: str):
     try:
         print(f"💬 [USER_MESSAGE] 처리 시작: {user_message}")
         
-        # 인사말 처리
+        # 1. 인사말 처리
         if is_greeting_message(user_message):
             clear_user_data(sender_id, "greeting")
             send_welcome_message(sender_id)
             return
         
-        # AI 검색 트리거 처리
-        if is_ai_search_trigger(user_message):
-            clear_user_data(sender_id, "ai_search")
-            send_ai_search_prompt(sender_id)
-            return
-        
-        # 수량 입력 처리
+        # 2. 수량 입력 처리 (주문 진행 중)
         if handle_quantity_input(sender_id, user_message):
             return
         
-        # 주문 정보 입력 처리
+        # 3. 주문 정보 입력 처리 (주문 진행 중)
         if handle_order_info_input(sender_id, user_message):
             return
         
-        # AI 응답 처리
-        await process_ai_response(sender_id, user_message)
+        # 4. AI 검색 모드인지 확인
+        user_data = UserDataManager.get_user_data(sender_id)
+        if user_data.get("ai_search_mode") == True:
+            # AI 검색 모드일 때만 AI 검색 실행
+            print(f"🤖 [AI_SEARCH_MODE] AI 검색 실행: {user_message}")
+            await process_ai_response(sender_id, user_message)
+            return
+        
+        # 5. 기본값: 도움말 메시지 (AI 검색 대신)
+        print(f" [DEFAULT] 일반 메시지 처리: {user_message}")
+        send_default_help_message(sender_id, user_message)
         
     except Exception as e:
         print(f"❌ [USER_MESSAGE] 처리 오류: {e}")
