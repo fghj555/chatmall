@@ -3775,9 +3775,9 @@ async def handle_chatmall_select_product_with_triggers(data: ExtendedChatmallReq
         )
 
 async def handle_chatmall_select_option_with_triggers(data: ExtendedChatmallRequest, session_id: str):
-    """3단계: 옵션 선택 처리 (트리거 메시지 포함)"""
+    """3단계: 옵션 선택 처리 (선택한 상품 정보 반영)"""
     try:
-        # ✅ 추가: 세션에서 product_code 가져오기
+        # ✅ 세션에서 product_code 가져오기
         session_data = WebOrderManager.get_session_data(session_id)
         product_code = session_data.get("product_code")
         
@@ -3787,12 +3787,20 @@ async def handle_chatmall_select_option_with_triggers(data: ExtendedChatmallRequ
                 content={"status": "error", "error": "선택된 상품이 없습니다. 상품을 먼저 선택해주세요."}
             )
         
+        # ✅ 선택한 상품의 실제 정보 가져오기
+        product = PRODUCT_CACHE.get(product_code)
+        if not product:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "error": "상품 정보를 찾을 수 없습니다. 다시 검색해주세요."}
+            )
+        
         option_name = data.option_name or "기본옵션"
         extra_price = data.extra_price or 0
         
-        print(f"⚙️ [CHATMALL_OPTION] 옵션 선택: {option_name}, 추가금액: {extra_price}")
+        print(f"⚙️ [CHATMALL_OPTION] 옵션 선택: {option_name}, 추가금액: {extra_price}, 상품: {product_code}")
         
-        # 세션에 옵션 정보 저장
+        # 선택한 상품 정보 반영
         selected_option_display = f"{option_name}" + (f" (+{extra_price:,}원)" if extra_price > 0 else "")
         
         WebOrderManager.update_session_data(
@@ -3805,9 +3813,9 @@ async def handle_chatmall_select_option_with_triggers(data: ExtendedChatmallRequ
         # Facebook 챗봇 스타일 트리거 메시지
         trigger_message = f"Selected Options: {selected_option_display}"
         
-        # 수량 입력 안내 메시지 생성
-        product_name = session_data.get("product_name", "상품")
-        bundle_size = session_data.get("bundle_size", 0)
+        # ✅ 선택한 상품의 실제 정보로 수량 입력 안내 메시지 생성
+        product_name = product.get('제목', '상품')
+        bundle_size = int(float(product.get("최대구매수량", 0) or 0))
         
         if bundle_size > 0:
             guidance_message = (
@@ -3856,7 +3864,7 @@ async def handle_chatmall_select_option_with_triggers(data: ExtendedChatmallRequ
         )
 
 async def handle_chatmall_set_quantity_with_triggers(data: ExtendedChatmallRequest, session_id: str):
-    """4단계: 수량 설정 처리 (트리거 메시지 포함)"""
+    """4단계: 수량 설정 처리 (선택한 상품 정보 반영)"""
     try:
         quantity = data.quantity or 1
         if quantity <= 0:
@@ -3865,9 +3873,7 @@ async def handle_chatmall_set_quantity_with_triggers(data: ExtendedChatmallReque
                 content={"status": "error", "error": "수량은 1개 이상이어야 합니다"}
             )
         
-        print(f"🔢 [CHATMALL_QUANTITY] 수량 설정: {quantity}")
-        
-        # ✅ 추가: 세션에서 product_code 가져오기
+        # ✅ 세션에서 product_code 가져오기
         session_data = WebOrderManager.get_session_data(session_id)
         product_code = session_data.get("product_code")
         
@@ -3877,12 +3883,24 @@ async def handle_chatmall_set_quantity_with_triggers(data: ExtendedChatmallReque
                 content={"status": "error", "error": "선택된 상품이 없습니다. 상품을 먼저 선택해주세요."}
             )
         
-        # 가격 계산
-        unit_price = session_data.get("unit_price", 0)
+        # ✅ 선택한 상품의 실제 정보 가져오기
+        product = PRODUCT_CACHE.get(product_code)
+        if not product:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "error": "상품 정보를 찾을 수 없습니다. 다시 검색해주세요."}
+            )
+        
+        print(f"🔢 [CHATMALL_QUANTITY] 수량 설정: {quantity}, 상품: {product_code}")
+        
+        # ✅ 선택한 상품의 실제 정보로 가격 계산
+        unit_price = int(float(product.get("가격", 0) or 0))
+        shipping_fee = int(float(product.get("배송비", 0) or 0))
+        bundle_size = int(float(product.get("최대구매수량", 0) or 0))
+        product_name = product.get('제목', '상품')
+        
+        # 세션에서 옵션 정보 가져오기
         extra_price = session_data.get("extra_price", 0)
-        shipping_fee = session_data.get("shipping_fee", 0)
-        bundle_size = session_data.get("bundle_size", 0)
-        product_name = session_data.get("product_name", "상품")
         selected_option = session_data.get("selected_option", "기본옵션")
         
         item_price = unit_price + extra_price
@@ -3998,7 +4016,7 @@ async def handle_chatmall_set_quantity_with_triggers(data: ExtendedChatmallReque
         )
 
 async def handle_chatmall_submit_info_with_triggers(data: ExtendedChatmallRequest, session_id: str):
-    """5단계: 주문자 정보 입력 처리 (트리거 메시지 포함)"""
+    """5단계: 주문자 정보 입력 처리 (선택한 상품 정보 반영)"""
     try:
         # 필수 필드 검증
         required_fields = {
@@ -4015,9 +4033,7 @@ async def handle_chatmall_submit_info_with_triggers(data: ExtendedChatmallReques
                     content={"status": "error", "error": f"{field_name}는 필수 입력 항목입니다"}
                 )
         
-        print(f"📝 [CHATMALL_INFO] 주문 정보 입력: {data.receiver_name}")
-        
-        # ✅ 추가: 세션에서 product_code 가져오기
+        # ✅ 세션에서 product_code 가져오기
         session_data = WebOrderManager.get_session_data(session_id)
         product_code = session_data.get("product_code")
         
@@ -4026,6 +4042,16 @@ async def handle_chatmall_submit_info_with_triggers(data: ExtendedChatmallReques
                 status_code=400,
                 content={"status": "error", "error": "선택된 상품이 없습니다. 처음부터 다시 시작해주세요."}
             )
+        
+        # ✅ 선택한 상품의 실제 정보 가져오기
+        product = PRODUCT_CACHE.get(product_code)
+        if not product:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "error": "상품 정보를 찾을 수 없습니다. 다시 검색해주세요."}
+            )
+        
+        print(f"📝 [CHATMALL_INFO] 주문 정보 입력: {data.receiver_name}, 상품: {product_code}")
         
         # 세션에 주문자 정보 저장
         WebOrderManager.update_session_data(
@@ -4037,6 +4063,9 @@ async def handle_chatmall_submit_info_with_triggers(data: ExtendedChatmallReques
             step="info_submitted"
         )
         
+        # ✅ 선택한 상품의 실제 정보로 주문 확인 메시지 생성
+        product_name = product.get('제목', '상품')
+        
         # Facebook 챗봇 스타일 주문 확인 메시지
         trigger_message = (
             f"Kindly review and confirm the info below is correct:\n\n"
@@ -4044,7 +4073,7 @@ async def handle_chatmall_submit_info_with_triggers(data: ExtendedChatmallReques
             f"Address: {data.address}\n"
             f"Contact #: {data.phone_number}\n"
             f"Email: {data.email}\n\n"
-            f"Product: {session_data.get('product_name', '')}\n"
+            f"Product: {product_name}\n"
             f"Option: {session_data.get('selected_option', '')}\n"
             f"Quantity: {session_data.get('quantity', '')}\n"
             f"Total_money: {session_data.get('total_price', 0):,}원"
@@ -4073,7 +4102,7 @@ async def handle_chatmall_submit_info_with_triggers(data: ExtendedChatmallReques
                     "email": data.email
                 },
                 "product_info": {
-                    "product_name": session_data.get("product_name"),
+                    "product_name": product_name,
                     "selected_option": session_data.get("selected_option"),
                     "quantity": session_data.get("quantity"),
                     "total_price": session_data.get("total_price")
@@ -4095,14 +4124,30 @@ async def handle_chatmall_submit_info_with_triggers(data: ExtendedChatmallReques
         )
 
 async def handle_chatmall_complete_with_triggers(data: ExtendedChatmallRequest, session_id: str):
-    """6단계: 주문 완료 처리 (트리거 메시지 포함)"""
+    """6단계: 주문 완료 처리 (선택한 상품 정보 반영)"""
     try:
         print(f"🎉 [CHATMALL_COMPLETE] 주문 완료 처리")
         
-        # 세션 데이터 확인
+        # ✅ 세션에서 product_code 가져오기
         session_data = WebOrderManager.get_session_data(session_id)
+        product_code = session_data.get("product_code")
         
-        if not session_data.get("receiver_name") or not session_data.get("product_name"):
+        if not product_code:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "error": "선택된 상품이 없습니다. 처음부터 다시 시작해주세요."}
+            )
+        
+        # ✅ 선택한 상품의 실제 정보 가져오기
+        product = PRODUCT_CACHE.get(product_code)
+        if not product:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "error": "상품 정보를 찾을 수 없습니다. 다시 검색해주세요."}
+            )
+        
+        # 세션 데이터 완전성 확인
+        if not session_data.get("receiver_name"):
             return JSONResponse(
                 status_code=400,
                 content={"status": "error", "error": "주문 정보가 완전하지 않습니다"}
@@ -4124,6 +4169,9 @@ async def handle_chatmall_complete_with_triggers(data: ExtendedChatmallRequest, 
                 order_number = f"CHATMALL{int(time.time())}"
                 timestamp = datetime.now(korea_timezone).strftime("%Y-%m-%d %H:%M:%S")
                 
+                # ✅ 선택한 상품의 실제 정보로 주문 완료 메시지 생성
+                product_name = product.get('제목', '상품')
+                
                 # Facebook 챗봇 스타일 주문 완료 메시지
                 completion_message = (
                     f"Order Completed Successfully!\n\n"
@@ -4134,7 +4182,7 @@ async def handle_chatmall_complete_with_triggers(data: ExtendedChatmallRequest, 
                     f"Contact: {session_data.get('phone_number', '')}\n"
                     f"Email: {session_data.get('email', '')}\n\n"
                     f"Order Details:\n"
-                    f"Product: {session_data.get('product_name', '')}\n"
+                    f"Product: {product_name}\n"
                     f"Option: {session_data.get('selected_option', '')}\n"
                     f"Quantity: {session_data.get('quantity', 0)}\n"
                     f"Total: {session_data.get('total_price', 0):,}원\n\n"
@@ -4151,8 +4199,9 @@ async def handle_chatmall_complete_with_triggers(data: ExtendedChatmallRequest, 
                     "order_number": order_number,
                     "message": "주문이 성공적으로 완료되었습니다!",
                     "order_details": {
+                        "product_code": product_code,
                         "receiver_name": session_data.get("receiver_name"),
-                        "product_name": session_data.get("product_name"),
+                        "product_name": product_name,
                         "quantity": session_data.get("quantity"),
                         "total_price": session_data.get("total_price"),
                         "timestamp": timestamp
@@ -5346,4 +5395,5 @@ async def broadcast_message_to_all_users(request: SendMessageRequest):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5051))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
