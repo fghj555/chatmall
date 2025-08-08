@@ -87,7 +87,7 @@ categories = df_categories['카테고리목록'].dropna().unique().tolist()
 
 # 클라이언트 및 래퍼
 client = OpenAIClient(api_key=API_KEY)
-llm = OpenAI(api_key=API_KEY, model=LLM_MODEL, temperature=0)
+llm = OpenAI(api_key=API_KEY, model=LLM_MODEL, temperature=1)
 embedder = OpenAIEmbeddings(api_key=API_KEY, model=EMB_MODEL)
 
 # API_URL 설정 (URL로 변경)
@@ -5758,6 +5758,7 @@ async def broadcast_message_to_all_users(request: SendMessageRequest):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5051))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
 
 
