@@ -157,7 +157,10 @@ def convert_to_serializable(obj):
     if isinstance(obj, (np.int64, np.int32, np.float32, np.float64)):
         return obj.item()
     return obj
-
+    
+class QueryRequest(BaseModel):
+    query: str
+    
 class UserDataManager:
     """사용자별 데이터 관리 클래스 - 주문 진행용 임시 저장소"""
     
@@ -5755,6 +5758,7 @@ async def broadcast_message_to_all_users(request: SendMessageRequest):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5051))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
 
 
