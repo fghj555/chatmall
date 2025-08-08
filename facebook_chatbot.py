@@ -87,7 +87,7 @@ categories = df_categories['카테고리목록'].dropna().unique().tolist()
 
 # 클라이언트 및 래퍼
 client = OpenAIClient(api_key=API_KEY)
-llm = OpenAI(api_key=API_KEY, model=LLM_MODEL)
+llm = OpenAI(api_key=API_KEY, model=LLM_MODEL, temperature=1)
 embedder = OpenAIEmbeddings(api_key=API_KEY, model=EMB_MODEL)
 
 # API_URL 설정 (URL로 변경)
@@ -2161,7 +2161,7 @@ def minimal_clean_with_llm(latest_input: str, previous_inputs: List[str]) -> str
             raise ValueError("[ERROR] OPENAI_API_KEY가 설정되지 않았습니다.")
         API_KEY = os.environ["OPENAI_API_KEY"]
 
-        llm = ChatOpenAI(model="gpt-5-mini-2025-08-07", openai_api_key=API_KEY)
+        llm = ChatOpenAI(model="gpt-5-mini-2025-08-07", openai_api_key=API_KEY, temperature=1)
 
         context_message = "\n".join(previous_inputs)
 
@@ -3174,7 +3174,7 @@ def external_search_and_generate_response(request: Union[QueryRequest, str], ses
         print(f"target_lang: {target_lang}")
 
         # LangChain 기반 프롬프트 및 LLM 실행 설정
-        llm = ChatOpenAI(model="gpt-5-mini-2025-08-07", openai_api_key=API_KEY)
+        llm = ChatOpenAI(model="gpt-5-mini-2025-08-07", openai_api_key=API_KEY, temperature=1)
         prompt = ChatPromptTemplate.from_messages([
             ("system", f"""
             **⚠️ 답변은 반드시 "{target_lang}" 언어로 답변 해주세요.**
@@ -5758,6 +5758,7 @@ async def broadcast_message_to_all_users(request: SendMessageRequest):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5051))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
 
 
