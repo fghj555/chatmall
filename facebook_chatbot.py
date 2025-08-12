@@ -4137,7 +4137,7 @@ class OrderCompleteRequest(BaseModel):
 @app.post("/chatmall/complete")
 async def chatmall_complete_endpoint(data: OrderCompleteRequest):
     """
-    6단계: 주문 완료 처리
+    6단계: 주문 완료 처리 - 개선된 개별 키 반환 버전
     """
     try:
         print(f"[CHATMALL_COMPLETE] 주문 완료 처리")
@@ -4149,7 +4149,15 @@ async def chatmall_complete_endpoint(data: OrderCompleteRequest):
         if not product_code:
             return JSONResponse(
                 status_code=400,
-                content={"status": "error", "error": "선택된 상품이 없습니다. 처음부터 다시 시작해주세요."}
+                content={
+                    "status": "error", 
+                    "error_code": "MISSING_PRODUCT",
+                    "error": "선택된 상품이 없습니다. 처음부터 다시 시작해주세요.",
+                    "error_message": "선택된 상품이 없습니다. 처음부터 다시 시작해주세요.",
+                    "session_id": data.session_id,
+                    "suggestion": "먼저 상품을 검색하고 선택해주세요",
+                    "next_action": "search"
+                }
             )
         
         # 선택한 상품의 실제 정보 가져오기
@@ -4157,22 +4165,33 @@ async def chatmall_complete_endpoint(data: OrderCompleteRequest):
         if not product:
             return JSONResponse(
                 status_code=400,
-                content={"status": "error", "error": "상품 정보를 찾을 수 없습니다. 다시 검색해주세요."}
+                content={
+                    "status": "error",
+                    "error_code": "PRODUCT_NOT_FOUND", 
+                    "error": "상품 정보를 찾을 수 없습니다. 다시 검색해주세요.",
+                    "error_message": "상품 정보를 찾을 수 없습니다. 다시 검색해주세요.",
+                    "product_code": product_code,
+                    "session_id": data.session_id,
+                    "suggestion": "다시 상품을 검색해주세요",
+                    "next_action": "search"
+                }
             )
         
         # 세션 데이터 완전성 확인
         if not session_data.get("receiver_name"):
             return JSONResponse(
                 status_code=400,
-                content={"status": "error", "error": "주문 정보가 완전하지 않습니다"}
+                content={
+                    "status": "error",
+                    "error_code": "INCOMPLETE_ORDER_INFO",
+                    "error": "주문 정보가 완전하지 않습니다",
+                    "error_message": "주문 정보가 완전하지 않습니다",
+                    "session_id": data.session_id,
+                    "missing_fields": ["receiver_name", "address", "phone_number", "email"],
+                    "suggestion": "주문 정보를 다시 입력해주세요",
+                    "next_action": "submit_info"
+                }
             )
-        
-        # 결제 확인 메시지 (Facebook 챗봇 스타일)
-        payment_confirmation_message = (
-            "💳 Payment Confirmation\n\n"
-            "📤 Once we confirm your payment, we'll process your order right away! 🚚💨\n\n"
-            "⏳ Please give us a moment while our ChatMall team confirms your payment. 💳"
-        )
         
         # 구글 시트 전송
         try:
@@ -4182,75 +4201,297 @@ async def chatmall_complete_endpoint(data: OrderCompleteRequest):
                 WebOrderManager.update_session_data(data.session_id, step="completed")
                 order_number = f"CHATMALL{int(time.time())}"
                 timestamp = datetime.now(korea_timezone).strftime("%Y-%m-%d %H:%M:%S")
+                iso_timestamp = datetime.now(korea_timezone).isoformat()
                 
-                # 선택한 상품의 실제 정보로 주문 완료 메시지 생성
+                # 선택한 상품의 실제 정보 추출
                 product_name = product.get('제목', '상품')
+                unit_price = int(float(product.get("가격", 0) or 0))
+                shipping_fee = int(float(product.get("배송비", 0) or 0))
                 
-                # Facebook 챗봇 스타일 주문 완료 메시지
-                completion_message = (
-                    f"✅ Order Completed Successfully! 🎉\n\n"
-                    f"📅 Order Time: {timestamp}\n"
-                    f"👤 Customer: {session_data.get('receiver_name', '')}\n"
-                    f"📋 Receiver: {session_data.get('receiver_name', '')}\n"
-                    f"🏠 Address: {session_data.get('address', '')}\n"
-                    f"📞 Contact: {session_data.get('phone_number', '')}\n"
-                    f"📧 Email: {session_data.get('email', '')}\n\n"
-                    f"🛍️ Order Details:\n"
-                    f"📦 Product: {product_name}\n"
-                    f"⚙️ Option: {session_data.get('selected_option', '')}\n"
-                    f"🔢 Quantity: {session_data.get('quantity', 0)}\n"
-                    f"💰 Total: {session_data.get('total_price', 0):,}원\n\n"
-                    f"🚚 We'll start processing your order right away!\n"
-                    f"Thank you for shopping with ChatMall! 😊"
-                )
+                # 세션에서 주문 정보 추출
+                receiver_name = session_data.get("receiver_name", "")
+                delivery_address = session_data.get("address", "")
+                contact_phone = session_data.get("phone_number", "")
+                contact_email = session_data.get("email", "")
+                selected_option = session_data.get("selected_option", "")
+                quantity = session_data.get("quantity", 0)
+                total_price = session_data.get("total_price", 0)
+                extra_price = session_data.get("extra_price", 0)
                 
+                print(f"[CHATMALL_COMPLETE] 주문 완료 성공 - 주문번호: {order_number}")
+                
+                # 각 문장을 개별 키로 분리한 응답 구조
                 return JSONResponse(content={
+                    # 기본 상태 정보
                     "status": "success",
                     "action": "complete",
                     "session_id": data.session_id,
-                    "trigger_message": payment_confirmation_message,
-                    "completion_message": completion_message,
+                    
+                    # 기본 데이터
                     "order_number": order_number,
+                    "order_time": timestamp,
+                    "order_time_iso": iso_timestamp,
+                    "order_status": "completed",
+                    "timezone": "Asia/Seoul",
+                    
+                    # 각 문장별 개별 키
+                    "success_message": "✅ Order Completed Successfully! 🎉",
+                    
+                    # 시간 정보
+                    "order_time_label": "📅 Order Time:",
+                    "order_time_value": timestamp,
+                    "order_time_full": f"📅 Order Time: {timestamp}",
+                    
+                    # 고객 정보 - 각 줄별로
+                    "customer_label": "👤 Customer:",
+                    "customer_value": receiver_name,
+                    "customer_full": f"👤 Customer: {receiver_name}",
+                    
+                    "receiver_label": "📋 Receiver:",
+                    "receiver_value": receiver_name,
+                    "receiver_full": f"📋 Receiver: {receiver_name}",
+                    
+                    "address_label": "🏠 Address:",
+                    "address_value": delivery_address,
+                    "address_full": f"🏠 Address: {delivery_address}",
+                    
+                    "contact_label": "📞 Contact:",
+                    "contact_value": contact_phone,
+                    "contact_full": f"📞 Contact: {contact_phone}",
+                    
+                    "email_label": "📧 Email:",
+                    "email_value": contact_email,
+                    "email_full": f"📧 Email: {contact_email}",
+                    
+                    # 주문 상세 섹션
+                    "order_details_title": "🛍️ Order Details:",
+                    
+                    "product_label": "📦 Product:",
+                    "product_value": product_name,
+                    "product_full": f"📦 Product: {product_name}",
+                    
+                    "option_label": "⚙️ Option:",
+                    "option_value": selected_option,
+                    "option_full": f"⚙️ Option: {selected_option}",
+                    
+                    "quantity_label": "🔢 Quantity:",
+                    "quantity_value": quantity,
+                    "quantity_full": f"🔢 Quantity: {quantity}",
+                    
+                    "total_label": "💰 Total:",
+                    "total_value": total_price,
+                    "total_formatted": f"{total_price:,}원",
+                    "total_full": f"💰 Total: {total_price:,}원",
+                    
+                    # 마무리 메시지들
+                    "processing_message": "🚚 We'll start processing your order right away!",
+                    "thank_you_message": "Thank you for shopping with ChatMall! 😊",
+                    
+                    # 원본 데이터 (가공되지 않은)
+                    "raw_data": {
+                        "customer_name": receiver_name,
+                        "delivery_address": delivery_address,
+                        "contact_phone": contact_phone,
+                        "contact_email": contact_email,
+                        "product_name": product_name,
+                        "product_code": product_code,
+                        "selected_option": selected_option,
+                        "quantity": quantity,
+                        "unit_price": unit_price,
+                        "extra_price": extra_price,
+                        "shipping_fee": shipping_fee,
+                        "total_price": total_price,
+                        "order_time": timestamp
+                    },
+                    
+                    # 아이콘만 따로
+                    "icons": {
+                        "success": "✅",
+                        "celebration": "🎉",
+                        "time": "📅",
+                        "customer": "👤", 
+                        "receiver": "📋",
+                        "address": "🏠",
+                        "contact": "📞",
+                        "email": "📧",
+                        "order_details": "🛍️",
+                        "product": "📦",
+                        "option": "⚙️",
+                        "quantity": "🔢",
+                        "total": "💰",
+                        "shipping": "🚚",
+                        "thanks": "😊"
+                    },
+                    
+                    # 레이블만 따로 (아이콘 제외)
+                    "labels": {
+                        "order_time": "Order Time:",
+                        "customer": "Customer:",
+                        "receiver": "Receiver:",
+                        "address": "Address:",
+                        "contact": "Contact:",
+                        "email": "Email:",
+                        "order_details": "Order Details:",
+                        "product": "Product:",
+                        "option": "Option:",
+                        "quantity": "Quantity:",
+                        "total": "Total:"
+                    },
+                    
+                    # 값만 따로
+                    "values": {
+                        "order_time": timestamp,
+                        "customer": receiver_name,
+                        "receiver": receiver_name,
+                        "address": delivery_address,
+                        "contact": contact_phone,
+                        "email": contact_email,
+                        "product": product_name,
+                        "option": selected_option,
+                        "quantity": quantity,
+                        "total": total_price,
+                        "total_formatted": f"{total_price:,}원"
+                    },
+                    
+                    # 상태 플래그
+                    "flags": {
+                        "order_completed": True,
+                        "payment_confirmed": True,
+                        "sheets_saved": sheet_success,
+                        "processing_started": True,
+                        "can_start_new_order": True,
+                        "show_home_button": True,
+                        "show_track_order": True,
+                        "show_receipt": True
+                    },
+                    
+                    # 네비게이션 정보
+                    "navigation": {
+                        "can_start_new_order": True,
+                        "new_search_endpoint": "/chatmall/search",
+                        "home_endpoint": "/chatmall/reset",
+                        "track_order_endpoint": "/chatmall/track",
+                        "support_endpoint": "/chatmall/support"
+                    },
+                    
+                    # 비즈니스 정보
+                    "business_info": {
+                        "store_name": "ChatMall",
+                        "store_emoji": "🛒",
+                        "support_phone": "1588-0000",
+                        "support_email": "help@chatmall.kr",
+                        "business_hours": "평일 09:00-18:00"
+                    },
+                    
+                    # 메타데이터
+                    "metadata": {
+                        "order_source": "web_api",
+                        "api_version": "v2.0",
+                        "endpoint_version": "sentence_level_keys",
+                        "processed_at": iso_timestamp,
+                        "server_timezone": "Asia/Seoul",
+                        "order_type": "online",
+                        "payment_method": "bank_transfer"
+                    },
+                    
+                    # 하위 호환성을 위한 기존 필드들
                     "message": "주문이 성공적으로 완료되었습니다!",
                     "order_details": {
                         "product_code": product_code,
-                        "receiver_name": session_data.get("receiver_name"),
+                        "receiver_name": receiver_name,
                         "product_name": product_name,
-                        "quantity": session_data.get("quantity"),
-                        "total_price": session_data.get("total_price"),
+                        "quantity": quantity,
+                        "total_price": total_price,
                         "timestamp": timestamp
                     },
-                    "navigation": {
-                        "can_start_new_order": True,
-                        "new_search_endpoint": "/chatmall/search"
+                    
+                    # 🔥 기존 긴 메시지들 (하위 호환성을 위해 유지)
+                    "trigger_message": (
+                        "💳 Payment Confirmation\n\n"
+                        "📤 Once we confirm your payment, we'll process your order right away! 🚚💨\n\n"
+                        "⏳ Please give us a moment while our ChatMall team confirms your payment. 💳"
+                    ),
+                    "completion_message": (
+                        f"✅ Order Completed Successfully! 🎉\n\n"
+                        f"📅 Order Time: {timestamp}\n"
+                        f"👤 Customer: {receiver_name}\n"
+                        f"📋 Receiver: {receiver_name}\n"
+                        f"🏠 Address: {delivery_address}\n"
+                        f"📞 Contact: {contact_phone}\n"
+                        f"📧 Email: {contact_email}\n\n"
+                        f"🛍️ Order Details:\n"
+                        f"📦 Product: {product_name}\n"
+                        f"⚙️ Option: {selected_option}\n"
+                        f"🔢 Quantity: {quantity}\n"
+                        f"💰 Total: {total_price:,}원\n\n"
+                        f"🚚 We'll start processing your order right away!\n"
+                        f"Thank you for shopping with ChatMall! 😊"
+                    ),
+                    
+                    # 디버깅 정보 (개발 환경에서만 사용)
+                    "debug_info": {
+                        "session_data_keys": list(session_data.keys()),
+                        "product_cache_hit": product_code in PRODUCT_CACHE,
+                        "sheets_integration": "success" if sheet_success else "failed",
+                        "processing_time": "< 1s"
                     }
                 })
+                
             else:
                 return JSONResponse(
                     status_code=500,
                     content={
                         "status": "error", 
+                        "error_code": "SHEETS_SAVE_FAILED",
                         "error": "주문 처리 중 오류가 발생했습니다",
-                        "trigger_message": "There was a temporary issue with our order processing system."
+                        "error_message": "주문 정보 저장에 실패했습니다",
+                        "session_id": data.session_id,
+                        "trigger_message": "There was a temporary issue with our order processing system.",
+                        "suggestion": "잠시 후 다시 시도해주세요",
+                        "retry_available": True,
+                        "next_action": "retry_or_contact_support"
                     }
                 )
                 
         except Exception as e:
             print(f"[CHATMALL_COMPLETE] 구글 시트 오류: {e}")
+            import traceback
+            print(f"[CHATMALL_COMPLETE] 상세 오류:\n{traceback.format_exc()}")
+            
             return JSONResponse(
                 status_code=500,
                 content={
-                    "status": "error", 
+                    "status": "error",
+                    "error_code": "SHEETS_ERROR", 
                     "error": "구글 시트 전송에 실패했습니다",
-                    "trigger_message": "There was a temporary issue with our order processing system."
+                    "error_message": f"주문 정보 저장 중 오류가 발생했습니다: {str(e)}",
+                    "session_id": data.session_id,
+                    "trigger_message": "There was a temporary issue with our order processing system.",
+                    "technical_error": str(e),
+                    "suggestion": "잠시 후 다시 시도하거나 고객센터로 문의해주세요",
+                    "retry_available": True
                 }
             )
         
     except Exception as e:
-        print(f"[CHATMALL_COMPLETE] 오류: {e}")
+        print(f"[CHATMALL_COMPLETE] 전체 오류: {e}")
+        import traceback
+        print(f"[CHATMALL_COMPLETE] 상세 전체 오류:\n{traceback.format_exc()}")
+        
         return JSONResponse(
             status_code=500,
-            content={"status": "error", "error": str(e), "action": "complete"}
+            content={
+                "status": "error", 
+                "error_code": "INTERNAL_ERROR",
+                "error": str(e), 
+                "action": "complete",
+                "error_message": "주문 완료 처리 중 내부 오류가 발생했습니다",
+                "session_id": data.session_id,
+                "technical_error": str(e),
+                "suggestion": "잠시 후 다시 시도하거나 고객센터에 문의해주세요",
+                "retry_available": True,
+                "fallback_action": "contact_support"
+            }
         )
         
 # ============================================================================
@@ -5758,6 +5999,7 @@ async def broadcast_message_to_all_users(request: SendMessageRequest):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5051))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
 
 
