@@ -3635,31 +3635,32 @@ async def chatmall_select_product_endpoint(data: ProductSelectionRequest):
             f"Let's proceed with your order! 😊"
         )
         
-        # 옵션 파싱
+        # 옵션 파싱 (수정된 버전)
         options = []
         options_raw = product.get("조합형옵션", "")
         
         if options_raw and str(options_raw).lower() not in ["nan", "", "none", "null"]:
-            option_lines = str(options_raw).split("\n") if '\n' in str(options_raw) else [str(options_raw)]
+            # 전체를 쉼표로 분리
+            all_parts = str(options_raw).split(",")
             
-            for line in option_lines:
-                line = line.strip()
-                if line:
+            # 3개씩 묶어서 처리 (옵션명, 추가가격, 재고)
+            for i in range(0, len(all_parts), 3):
+                if i + 2 < len(all_parts):  # 3개가 모두 있는지 확인
                     try:
-                        parts = line.split(",")
-                        if len(parts) >= 2:
-                            name = parts[0].strip()
-                            extra_price = int(float(parts[1].strip())) if parts[1].strip() else 0
-                            
-                            # 품절 체크
-                            is_soldout = "품절" in name.lower()
-                            
-                            options.append({
-                                "name": name,
-                                "extra_price": extra_price,
-                                "is_soldout": is_soldout,
-                                "display": f"{'❌ ' if is_soldout else ''}{name}" + (f" (+{extra_price:,}원)" if extra_price > 0 else "")
-                            })
+                        name = all_parts[i].strip()
+                        extra_price = int(float(all_parts[i + 1].strip())) if all_parts[i + 1].strip() else 0
+                        stock = int(float(all_parts[i + 2].strip())) if all_parts[i + 2].strip() else 0
+                        
+                        # 품절 체크 (재고가 0이거나 이름에 "품절" 포함)
+                        is_soldout = stock == 0 or "품절" in name.lower()
+                        
+                        options.append({
+                            "name": name,
+                            "extra_price": extra_price,
+                            "stock": stock,
+                            "is_soldout": is_soldout,
+                            "display": f"{'❌ ' if is_soldout else ''}{name}" + (f" (+{extra_price:,}원)" if extra_price > 0 else "")
+                        })
                     except:
                         continue
         
@@ -3672,7 +3673,7 @@ async def chatmall_select_product_endpoint(data: ProductSelectionRequest):
             if soldout_count > 0:
                 guidance_message += f"\n\nAvailable: {available_count} options"
                 guidance_message += f"\nSold out: {soldout_count} options"
-                guidance_message += f"\nOptions marked with are currently unavailable."
+                guidance_message += f"\nOptions marked with ❌ are currently unavailable."
         else:
             guidance_message = "🧾 This item has a single option — please enter the quantity."
         
@@ -5999,6 +6000,7 @@ async def broadcast_message_to_all_users(request: SendMessageRequest):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5051))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
 
 
