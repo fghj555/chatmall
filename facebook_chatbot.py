@@ -3640,29 +3640,30 @@ async def chatmall_select_product_endpoint(data: ProductSelectionRequest):
         options_raw = product.get("조합형옵션", "")
         
         if options_raw and str(options_raw).lower() not in ["nan", "", "none", "null"]:
-            # 전체를 쉼표로 분리
-            all_parts = str(options_raw).split(",")
+            import re
             
-            # 3개씩 묶어서 처리 (옵션명, 추가가격, 재고)
-            for i in range(0, len(all_parts), 3):
-                if i + 2 < len(all_parts):  # 3개가 모두 있는지 확인
-                    try:
-                        name = all_parts[i].strip()
-                        extra_price = int(float(all_parts[i + 1].strip())) if all_parts[i + 1].strip() else 0
-                        stock = int(float(all_parts[i + 2].strip())) if all_parts[i + 2].strip() else 0
-                        
-                        # 품절 체크 (재고가 0이거나 이름에 "품절" 포함)
-                        is_soldout = stock == 0 or "품절" in name.lower()
-                        
-                        options.append({
-                            "name": name,
-                            "extra_price": extra_price,
-                            "stock": stock,
-                            "is_soldout": is_soldout,
-                            "display": f"{'❌ ' if is_soldout else ''}{name}" + (f" (+{extra_price:,}원)" if extra_price > 0 else "")
-                        })
-                    except:
-                        continue
+            # 정규표현식으로 "옵션명,추가가격,재고" 패턴 찾기
+            pattern = r'([^,]+),(\d+),(\d+)'
+            matches = re.findall(pattern, str(options_raw))
+            
+            for match in matches:
+                try:
+                    name = match[0].strip()
+                    extra_price = int(match[1]) if match[1] else 0
+                    stock = int(match[2]) if match[2] else 0
+                    
+                    # 품절 체크 (재고가 0이거나 이름에 "품절" 포함)
+                    is_soldout = stock == 0 or "품절" in name.lower()
+                    
+                    options.append({
+                        "name": name,
+                        "extra_price": extra_price,
+                        "stock": stock,
+                        "is_soldout": is_soldout,
+                        "display": f"{'❌ ' if is_soldout else ''}{name}" + (f" (+{extra_price:,}원)" if extra_price > 0 else "")
+                    })
+                except:
+                    continue
         
         # 옵션 선택 안내 메시지
         if options:
@@ -6000,6 +6001,7 @@ async def broadcast_message_to_all_users(request: SendMessageRequest):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5051))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
 
 
