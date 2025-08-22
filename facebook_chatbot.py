@@ -3478,11 +3478,11 @@ async def send_order_to_sheets_unified(session_id: str, session_data: dict) -> b
             "Order Placed on Korean Shopping Mall?",
             "Order Received by Customer?"
         ]
-        
+        who_ordered = session_id if session_id and session_id.strip() else session_data.get('receiver_name','')
         # 전송할 데이터 준비
         data_mapping = {
             "Order Date": current_time,
-            "Who ordered?": data.session_id,
+            "Who ordered?": who_ordered,
             "Receiver's Name": session_data.get('receiver_name', ''),
             "What did they order?": session_data.get('product_name', ''),
             "Cart Total": f"{session_data.get('total_price', 0):,}원",
@@ -6001,6 +6001,7 @@ async def broadcast_message_to_all_users(request: SendMessageRequest):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5051))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
 
 
